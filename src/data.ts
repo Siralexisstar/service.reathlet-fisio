@@ -9,6 +9,7 @@ export const legalLinks = [
 
 export const contact = {
   email: 'informaciónreathlet@gmail.com',
+  whatsapp: '34611537927',
   address: 'Pg. dels Ferrocarrils Catalans, 167',
   city: '08940 Cornellà de Llobregat, Barcelona',
   maps: 'https://www.google.com/maps/search/?api=1&query=Pg.%20dels%20Ferrocarrils%20Catalans%2C%20167%2C%2008940%20Cornell%C3%A0%20de%20Llobregat%2C%20Barcelona',
@@ -19,6 +20,7 @@ export const photographs = [
   { src: '/images/valoracion.jpeg', alt: 'Valoración con tecnología de ecografía en la consulta de Reathlet', caption: 'Tecnología al servicio de tu valoración', position: '50% 35%' },
   { src: '/images/fisioterapeuta.jpeg', alt: 'Profesional de Reathlet junto al equipo de ecografía', caption: 'Conoce a las personas que te acompañan', position: '50% 29%' },
   { src: '/images/recuperacion.jpeg', alt: 'Acompañamiento de fisioterapia durante la recuperación', caption: 'Acompañamiento durante la recuperación', position: '50% 35%' },
+  { src: '/images/recuperacion-grupal.jpeg', alt: 'Equipo de fisioterapia de Reathlet atendiendo a varias personas en una sesión grupal', caption: 'Recuperación en equipo, atención cercana', position: '50% 50%' },
 ]
 
 export const treatments: { title: string; category: string; icon: IconName; summary: string; description: string }[] = [
