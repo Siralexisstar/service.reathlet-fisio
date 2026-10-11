@@ -1,0 +1,118 @@
+{
+  "common": {
+    "skipToContent": "Skip to content",
+    "home": "Reathlet, home",
+    "sportsPhysiotherapy": "SPORTS PHYSIOTHERAPY",
+    "bookAppointment": "Book an appointment",
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu",
+    "mainNavigation": "Main navigation",
+    "mobileNavigation": "Mobile navigation",
+    "contact": "Contact",
+    "backHome": "Back to Reathlet",
+    "backToTop": "Back to top",
+    "closeForm": "Close form",
+    "closeTreatment": "Close treatment"
+  },
+  "nav": { "clinic": "The clinic", "treatments": "Treatments", "recovery": "Your recovery", "contact": "Contact" },
+  "header": { "utility": "Your movement deserves care.", "location": "Cornellà de Llobregat, Barcelona" },
+  "hero": {
+    "eyebrow": "PHYSIOTHERAPY WITH ONE GOAL: YOU",
+    "title": "Move again.<br/>Be <em>yourself</em> again.",
+    "description": "Fewer limits. More life.<br/>We support your recovery with close attention, precise assessment and a plan made for you.",
+    "primary": "Book your first visit",
+    "secondary": "Explore treatments",
+    "individual": "Individual care",
+    "pace": "At your pace, with you",
+    "carouselLabel": "Reathlet photographs",
+    "photo": "View photograph {{number}} of 3",
+    "pause": "Pause carousel",
+    "play": "Play carousel",
+    "caption": "PEOPLE CARING FOR PEOPLE",
+    "floatTitle": "Recover what moves you",
+    "floatText": "From your everyday life to your next challenge."
+  },
+  "treatments": {
+    "eyebrow": "EVERY BODY. ITS OWN PATH.",
+    "title": "Technique matters.<br/><span>Listening to you, more.</span>",
+    "intro": "You do not need to know which treatment you need.<br/>We start by getting to know you and assessing your case.",
+    "previous": "Previous treatments",
+    "next": "More treatments",
+    "all": "Our eight treatments",
+    "learn": "Learn about {{title}}",
+    "learnText": "Learn about the treatment",
+    "footnote": "An individual assessment guides the choice of techniques. Not every treatment is right for every person.",
+    "assessmentTitle": "First, your assessment",
+    "assessmentText": "We explain the technique, its goals, possible risks and alternatives. The professional decides whether it is suitable for your case; you can ask questions and decide calmly.",
+    "askAbout": "Ask about your case"
+  },
+  "careStrip": { "assessment": "Assessment and technology", "close": "A close, personal approach", "recovery": "Recovery made for you", "here": "Here, in Cornellà" },
+  "recovery": {
+    "eyebrow": "YOU DO NOT HAVE TO GO THROUGH IT ALONE",
+    "title": "A clear plan.<br/>One step at a time.",
+    "intro": "From the first conversation to doing what you enjoy again.",
+    "tabs": "Recovery stages",
+    "step": "STEP {{number}} · WITH YOU, ALL THE WAY",
+    "cta": "Let's start with you"
+  },
+  "clinic": {
+    "gallery": "Discover our clinic",
+    "previous": "Previous photograph",
+    "next": "Next photograph",
+    "view": "View {{caption}}",
+    "eyebrow": "DISCOVER REATHLET",
+    "title": "Technology that helps.<br/><span>People who listen.</span>",
+    "paragraph1": "Behind every injury there is a person and something they want to return to. Training, working, walking or simply moving with more confidence.",
+    "paragraph2": "At Reathlet we combine clinical assessment, technology and hands-on work to support you with a treatment that makes sense for you.",
+    "benefits": ["Time to listen and answer your questions.", "Clear explanations, without unnecessary jargon.", "Shared goals and follow-up of your progress."],
+    "team": "Your physiotherapy team",
+    "speciality": "Sports and musculoskeletal physiotherapy",
+    "registration": "Professional registration: 00.000 · sample data",
+    "talk": "Let's talk about your recovery"
+  },
+  "faq": { "eyebrow": "CALMLY, FROM THE START", "title": "It is normal<br/>to have questions.", "intro": "Here are some of the most common questions before your first visit." },
+  "contactSection": {
+    "eyebrow": "YOUR NEXT STEP STARTS HERE",
+    "title": "Make room<br/>for your recovery.",
+    "intro": "Tell us what you would like to do again.<br/>We will help you take the first step.",
+    "firstVisit": "It is my first visit",
+    "returning": "I am already a patient",
+    "note": "No-obligation enquiry. Appointment subject to confirmation.",
+    "findUs": "You will find us in Cornellà",
+    "directions": "How to get there",
+    "schedule": "A schedule that works for you",
+    "hours": "Monday to Friday · 9:00–20:00",
+    "sampleHours": "Indicative hours for this proposal.",
+    "talk": "Let's talk",
+    "whatsapp": "Contact us on WhatsApp",
+    "floating": "Let's talk"
+  },
+  "footer": { "tagline": "Movement is part of you.<br/>Caring for it is how we support you.", "legal": "Legal information", "prototype": "Initial proposal · Sample professional details and hours. Form requests and signatures are simulated." },
+  "booking": { "eyebrow": "REATHLET · WITH YOU FROM THE START", "chooseTitle": "Shall we get to know each other?", "chooseText": "Choose the option that best describes you.", "dataTitle": "Let's start with you.", "dataText": "Only what we need to prepare your first contact.", "reasonTitle": "Tell us a little.", "reasonText": "You do not need a diagnosis. Tell us what you would like to recover.", "consentTitle": "Your peace of mind matters.", "consentText": "Read the information and sign to continue.", "channelTitle": "How would you like to talk?", "channelText": "The clinic will confirm availability and price.", "previewTitle": "Your first step is ready.", "previewText": "WhatsApp will open so you can review and send your message.", "demoStrong": "Test with fictional data.", "demoText": "This demo does not save health data or signatures and does not create real appointments.", "firstVisit": "It is my first visit", "returning": "I am already a patient", "next": "Continue", "back": "Back", "explore": "Keep exploring", "review": "Review", "finish": "Back to the website", "step": "Step {{step}} of 3", "yourData": "Your details", "yourConsultation": "Your consultation", "consent": "Consent", "formError": "Review the marked fields before continuing." },
+  "content": {
+    "treatments": [
+      { "title": "Hands-on therapy", "category": "Mobility and function", "summary": "Precise hands-on work to improve your mobility and function.", "description": "Manual techniques aimed at improving mobility, reducing pain and optimising musculoskeletal function." },
+      { "title": "Musculoskeletal ultrasound", "category": "Assessment", "summary": "See more to understand better. A tool that complements your clinical assessment.", "description": "An assessment tool that shows muscles, tendons, ligaments and other structures in real time to complement the clinical evaluation and guide treatment." },
+      { "title": "Shockwave therapy", "category": "Functional recovery", "summary": "Acoustic waves applied to tissue to support its functional recovery.", "description": "Application of acoustic waves to musculoskeletal tissue to stimulate biological processes, improve tissue capacity and support functional recovery." },
+      { "title": "Ultrasound-guided percutaneous electrolysis", "category": "Ultrasound-guided technique", "summary": "A localised approach to injured tissue, guided by ultrasound.", "description": "An ultrasound-guided invasive technique using an electrical current to support the regenerative response and recovery of injured tissue." },
+      { "title": "Percutaneous neuromodulation", "category": "Pain and function", "summary": "Targeted stimulation of neuromuscular structures to modulate pain.", "description": "A technique using electrical stimulation through needles, directed at neuromuscular structures to modulate pain and improve neuromuscular function." },
+      { "title": "Dry needling", "category": "Muscle treatment", "summary": "A specific technique for muscle points that may be related to your symptoms.", "description": "An invasive technique using needles on specific muscle points to reduce pain, normalise tone and improve muscle function." },
+      { "title": "Therapeutic massage", "category": "Muscle care", "summary": "Therapeutic massage to support tissue mobility and muscle recovery.", "description": "Massage techniques aimed at improving tissue mobility, supporting circulation and facilitating muscle recovery." },
+      { "title": "Diathermy", "category": "Therapeutic technology", "summary": "Radiofrequency with a controlled thermal effect, adapted to your treatment.", "description": "Radiofrequency therapy that creates a controlled thermal effect in tissue, supporting circulation, tissue metabolism and functional recovery." }
+    ],
+    "recovery": [
+      { "label": "We listen", "subtitle": "Initial assessment", "title": "We start with your story, not a technique.", "text": "We talk about your symptoms, your history and what you want to recover. Clinical examination helps us understand how you move and what you need." },
+      { "label": "We understand", "subtitle": "Study and goals", "title": "Understand what is happening. Know where we are going.", "text": "When indicated, ultrasound complements the assessment. We explain what we observe and agree concrete, realistic goals with you." },
+      { "label": "We work on it", "subtitle": "Personal treatment", "title": "A treatment that makes sense for you.", "text": "We choose techniques based on your assessment, preferences and progress. We explain every step and adapt the work to your tolerance and daily life." },
+      { "label": "We support you", "subtitle": "Follow-up", "title": "Recovery does not end when you leave the clinic.", "text": "We review your progress and adapt the plan when needed. The goal is for you to understand your process and move again with more independence and confidence." }
+    ],
+    "faq": [
+      { "question": "Do I need to know which treatment I need?", "answer": "No. At the first visit we talk about what is happening and assess you. We then explain the options and agree the next steps with you." },
+      { "question": "Do you only see people who do sport?", "answer": "No. Physiotherapy also supports everyday aches and pains. Whether you want to train, walk, work or move more comfortably, we start with your case." },
+      { "question": "What should I bring to my first visit?", "answer": "Comfortable clothing and, if you have them, reports or tests related to your reason for visiting. You can discuss your history and medication with the professional during the assessment." },
+      { "question": "Does an enquiry confirm an appointment?", "answer": "An enquiry is the first contact. The clinic must confirm availability, duration and price with you before booking. You do not need to pay to request information." },
+      { "question": "Why is there a form for new patients?", "answer": "It helps us prepare for the first conversation. It includes initial questions and consent about the data. This version is a demonstration: use fictional information; the form is not saved and does not create a real appointment." }
+    ]
+  },
+  "treatmentCategories": { "mobility": "Mobility and function", "assessment": "Assessment", "functionalRecovery": "Functional recovery", "guided": "Ultrasound-guided technique", "pain": "Pain and function", "muscleTreatment": "Muscle treatment", "muscleCare": "Muscle care", "technology": "Therapeutic technology" }
+}

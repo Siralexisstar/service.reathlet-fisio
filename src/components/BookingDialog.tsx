@@ -3,6 +3,7 @@ import type { FormEvent, PointerEvent, ReactNode } from 'react'
 import { contact } from '../data'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
+import { useTranslation } from 'react-i18next'
 
 type Channel = 'whatsapp' | 'email'
 export type BookingIntent = { patient?: 'new' | 'returning'; channel?: Channel }
@@ -11,12 +12,12 @@ type Intake = { name: string; email: string; phone: string; availability: string
 type Errors = Partial<Record<keyof Intake, string>>
 
 const headings: Record<Step, [string, string]> = {
-  choose: ['¿Nos conocemos?', 'Elige la opción que mejor te representa.'],
-  data: ['Empezamos por ti.', 'Solo lo necesario para preparar tu primer contacto.'],
-  reason: ['Cuéntanos un poquito.', 'No hace falta un diagnóstico. Cuéntanos qué te gustaría recuperar.'],
-  consent: ['Tu tranquilidad importa.', 'Lee la información y firma para continuar.'],
-  channel: ['¿Cómo prefieres hablar?', 'La clínica te confirmará disponibilidad y precio.'],
-  preview: ['Tu primer paso, preparado.', 'Se abrirá WhatsApp para que revises y envíes tu mensaje.'],
+  choose: ['booking.chooseTitle', 'booking.chooseText'],
+  data: ['booking.dataTitle', 'booking.dataText'],
+  reason: ['booking.reasonTitle', 'booking.reasonText'],
+  consent: ['booking.consentTitle', 'booking.consentText'],
+  channel: ['booking.channelTitle', 'booking.channelText'],
+  preview: ['booking.previewTitle', 'booking.previewText'],
 }
 
 function Field({ id, label, children, error, required = false, optional = false }: { id: string; label: string; children: ReactNode; error?: string; required?: boolean; optional?: boolean }) {
@@ -68,6 +69,7 @@ function SignatureDrawing({ value, onChange }: { value: string; onChange: (signa
 }
 
 export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onClose: () => void }) {
+  const { t } = useTranslation()
   const [step, setStep] = useState<Step>(intent.patient === 'new' ? 'data' : intent.patient === 'returning' ? 'channel' : 'choose')
   const [values, setValues] = useState<Intake>({ name: '', email: '', phone: '', availability: 'Sin preferencia', region: '', duration: '', reason: '', pain: '3', history: '', medication: '', signature: '', privacy: false, healthConsent: false })
   const [errors, setErrors] = useState<Errors>({})
@@ -133,8 +135,8 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
     catch { setCopyStatus('No se pudo copiar automáticamente. Puedes seleccionar y copiar el mensaje.') }
   }
 
-  return <Modal onClose={onClose} className="booking-dialog" label="booking-title">
-    <div className="booking-heading"><span className="eyebrow">REATHLET · CONTIGO DESDE EL PRINCIPIO</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{headings[step][0]}</h2><p data-slot="dialog-description">{headings[step][1]}</p></div>
+  return <Modal onClose={onClose} className="booking-dialog" label="booking-title" closeLabel={t('common.closeForm')}>
+    <div className="booking-heading"><span className="eyebrow">{t('booking.eyebrow')}</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{t(headings[step][0])}</h2><p data-slot="dialog-description">{t(headings[step][1])}</p></div>
     {formStep > 0 && <div className="form-progress"><div><span>Paso {formStep} de 3</span><span>{['Tus datos', 'Tu consulta', 'Consentimiento'][formStep - 1]}</span></div><div className="intake-progress" role="progressbar" aria-label={`Paso ${formStep} de 3`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(formStep / 3 * 100)}><div data-slot="progress-indicator" style={{ width: `${formStep / 3 * 100}%`, height: '100%' }} /></div></div>}
     <div ref={content} className="booking-content">
       <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>Prueba con datos ficticios.</strong> Esta demo no guarda datos de salud ni firmas y no crea citas reales.</p></div>

@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+
+current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+
+case "$current_branch" in
+  main|master|"")
+    ;;
+  *)
+    pattern='^(feature|bugfix)/[A-Z]+-[0-9]+[_-].+$'
+
+    if ! printf '%s\n' "$current_branch" | grep -Eq "$pattern"; then
+      echo "Branch name '$current_branch' does not follow the naming convention."
+      echo "Expected pattern: <type>/PROJECT-<number>-<title>"
+      echo "Types allowed: feature or bugfix"
+      exit 1
+    fi
+
+    echo "Branch name follows the convention."
+    ;;
+esac
+
+npm run check
