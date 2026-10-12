@@ -27,6 +27,8 @@ const paths = {
   lock: ['M7 10V7a5 5 0 0 1 10 0v3', 'M5 10h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z', 'M12 15v3'],
   copy: ['M9 9h12v12H9Z', 'M5 15H3V3h12v2'],
   up: ['m6 12 6-6 6 6M12 6v15'],
+  instagram: ['M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Z', 'M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37Z', 'M17.5 6.5h.01'],
+  tiktok: ['M15 4v10.5a4.5 4.5 0 1 1-4-4.47', 'M15 4c.4 2.4 1.8 4 4 4'],
 } as const
 
 export type IconName = keyof typeof paths

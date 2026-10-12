@@ -368,6 +368,31 @@ h2 span,p {
   display:flex
 }
 
+.social-links {
+  align-items:center;
+  gap:6px;
+  display:flex
+}
+
+.social-link {
+  width:36px;
+  height:36px;
+  color:var(--navy);
+  border:1px solid #dce3eb;
+  border-radius:50%;
+  align-items:center;
+  justify-content:center;
+  display:inline-flex;
+  transition:color .2s,background .2s,border-color .2s,transform .2s
+}
+
+.social-link:hover {
+  color:var(--orange);
+  background:var(--accent);
+  border-color:#f4c3a3;
+  transform:translateY(-2px)
+}
+
 .mobile-menu,.mobile-nav {
   display:none
 }
@@ -1724,6 +1749,15 @@ h2 span,p {
 
   .header-actions {
     gap:8px
+  }
+
+  .social-links {
+    gap:4px
+  }
+
+  .social-link {
+    width:34px;
+    height:34px
   }
 
   .header-actions .button {

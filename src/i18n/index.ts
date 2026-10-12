@@ -13,7 +13,7 @@ void i18n
   .init({
     resources: { 'en-GB': { translation: enGB }, 'es-ES': { translation: esES }, 'ca-ES': { translation: caES } },
     supportedLngs: supportedLanguages,
-    fallbackLng: 'en-GB',
+    fallbackLng: 'es-ES',
     load: 'currentOnly',
     detection: { order: ['navigator'], caches: [] },
     interpolation: { escapeValue: false },

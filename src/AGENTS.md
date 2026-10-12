@@ -17,9 +17,10 @@ the visitor's browser language.
 
 The UI detects the user's preferred browser language. It supports `ca-ES`, `fr-CH`,
 `fr-FR`, `fr-LU`, `es-ES`, `it-IT`, `nl-NL`, `nl-BE`, `de-DE`, `fr-BE`, `de-CH`,
-`en-GB`, `hu-HU`, `it-CH`, `pl-PL`, `de-AT`, and `tr-TR`. Unsupported languages
-fall back to `en-GB`. Language detection runs when the application starts; there is
-currently no manual language selector and the detected language is not persisted.
+`en-GB`, `hu-HU`, `it-CH`, `pl-PL`, `de-AT`, and `tr-TR`. If no supported browser
+language is detected, the website defaults to `es-ES`. Language detection runs
+when the application starts; there is currently no manual language selector and
+the detected language is not persisted.
 
 Translation catalogs live in `src/i18n/locales`. Keep all locale files structurally
 aligned with `en-GB.json` when adding or changing user-facing text.
@@ -105,7 +106,8 @@ Centralize configuration to prevent differences between sections:
 - Provided email: informaciónreathlet@gmail.com.
   Confirm its spelling before enabling real sending.
 - WhatsApp number: +34 611 53 79 27.
-- Legal holder, professional registration number and opening hours: pending confirmation.
+- Legal holder and professional registration number: pending confirmation.
+- Opening hours: Monday to Friday, 09:00–14:00 and 16:00–20:00; Saturday, 10:00–14:00; Sunday, closed.
 - Additional social networks:
   - https://www.instagram.com/reathlet_fisio/
   - https://www.tiktok.com/@reathlet_fisio?_r=1&_t=ZS-95M7tDlfvSK

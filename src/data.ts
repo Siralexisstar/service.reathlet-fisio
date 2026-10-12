@@ -15,6 +15,11 @@ export const contact = {
   maps: 'https://www.google.com/maps/search/?api=1&query=Pg.%20dels%20Ferrocarrils%20Catalans%2C%20167%2C%2008940%20Cornell%C3%A0%20de%20Llobregat%2C%20Barcelona',
 }
 
+export const socialLinks: { name: string; href: string; icon: 'instagram' | 'tiktok' }[] = [
+  { name: 'Instagram', href: 'https://www.instagram.com/reathlet_fisio/', icon: 'instagram' },
+  { name: 'TikTok', href: 'https://www.tiktok.com/@reathlet_fisio?_r=1&_t=ZS-95M7tDlfvSK', icon: 'tiktok' },
+]
+
 export const photographs = [
   { src: '/images/terapia-manual.jpeg', alt: 'Fisioterapeuta de Reathlet atendiendo a una persona en la consulta', caption: 'Atención cercana, en cada sesión', position: '50% 35%' },
   { src: '/images/valoracion.jpeg', alt: 'Valoración con tecnología de ecografía en la consulta de Reathlet', caption: 'Tecnología al servicio de tu valoración', position: '50% 35%' },

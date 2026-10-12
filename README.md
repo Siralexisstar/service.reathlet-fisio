@@ -1,15 +1,16 @@
 # Reathlet
 
-Primera versión en React 19, TypeScript y Vite de la web de fisioterapia de Reathlet, basada en la [propuesta de referencia](https://reathlet-fisioterapia.alexgarciavillar96.chatgpt.site/).
+First version of Reathlet's physiotherapy website, built with React 19,
+TypeScript and Vite, based on the [reference proposal](https://reathlet-fisioterapia.alexgarciavillar96.chatgpt.site/).
 
-## Desarrollo
+## Development
 
 ```sh
 npm install
 npm run dev
 ```
 
-Vite muestra en la terminal la dirección local. Para comprobar el proyecto:
+Vite prints the local address in the terminal. To check the project:
 
 ```sh
 npm run lint
@@ -17,30 +18,42 @@ npm run build
 npm run preview
 ```
 
-## Contenido
+## Content
 
-- Portada con carrusel de tres fotografías y reproducción controlada.
-- Ocho tratamientos con carrusel horizontal y fichas informativas.
-- Cuatro etapas de recuperación, con navegación por teclado.
-- Galería de la consulta, preguntas frecuentes y contacto.
-- Formularios para pacientes nuevos y existentes: validación, firma escrita o dibujada y vista previa de contacto.
-- Aviso legal, privacidad, cookies y accesibilidad en las rutas `/legal/*`.
+- Home page with a three-photo carousel and controlled playback.
+- Eight treatments with a horizontal carousel and information cards.
+- Four recovery stages with keyboard navigation.
+- Clinic gallery, frequently asked questions and contact section.
+- Forms for new and existing patients, including validation, typed or drawn signatures and contact preview.
+- Legal notice, privacy, cookies and accessibility pages under `/legal/*`.
+- Browser-language detection with Spanish (`es-ES`) as the default fallback, plus English and Catalan catalogs.
+- Instagram and TikTok links in the main header.
 
-El logotipo, las fotografías, los textos y la base visual se han trasladado desde la referencia. Las imágenes se sirven desde `public/images`, sin depender de la sesión del sitio original.
+The logo, photographs, copy and visual foundation were migrated from the reference.
+Images are served from `public/images` and do not depend on a session in the original site.
 
-## Estructura
+## Structure
 
-- `src/App.tsx`: secciones de la página y navegación.
-- `src/data.ts`: tratamientos, fotografías, pasos, preguntas y datos de contacto.
-- `src/components/BookingDialog.tsx`: recorrido de solicitud de cita.
-- `src/components/Modal.tsx`: ventanas nativas con gestión del foco.
-- `src/components/LegalPage.tsx`: páginas informativas.
-- `src/App.css`: estilos y adaptación a móvil.
+- `src/App.tsx`: page sections and navigation.
+- `src/data.ts`: treatments, photographs, recovery steps, questions and contact data.
+- `src/i18n/`: i18next configuration and locale catalogs.
+- `src/components/BookingDialog.tsx`: appointment request flow.
+- `src/components/Modal.tsx`: native dialogs with focus management.
+- `src/components/LegalPage.tsx`: informational and legal pages.
+- `src/App.css`: styles and mobile adaptations.
+- `.husky/`: pre-commit and pre-push validation hooks.
 
-## Estado de esta primera versión
+## Current status
 
-Las solicitudes son una demostración, como en la propuesta original. Utiliza datos ficticios. El formulario y la firma permanecen en memoria y se descartan al cerrar; no hay backend ni reservas reales.
+Requests are still a demonstration, as in the original proposal. Use fictional data.
+The form and signature remain in memory and are discarded when the dialog closes;
+there is no backend and no real booking system.
 
-La vista previa de WhatsApp permite copiar el mensaje; el número de destino está pendiente de configurar. El correo puede abrir un borrador en el cliente del visitante. El mensaje contiene únicamente el nombre y la preferencia horaria, sin añadir la información de salud ni la firma.
+The WhatsApp preview lets users copy the message; the real contact integration still
+needs to be verified. Email can open a draft in the visitor's email client. The
+message contains only the name and time preference, without health information or signature.
 
-Los horarios, el número de colegiado y la información legal conservan los datos de muestra de la referencia. Para una siguiente versión quedan la validación de los datos profesionales, la configuración de WhatsApp y la integración real de solicitudes.
+Confirmed opening hours are Monday to Friday, 09:00–14:00 and 16:00–20:00;
+Saturday, 10:00–14:00; and Sunday, closed. The professional registration number
+and legal information still contain data that must be validated. Future work includes
+validating the professional details, verifying WhatsApp configuration and integrating real requests.
