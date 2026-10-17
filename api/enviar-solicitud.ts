@@ -77,7 +77,9 @@ export default {
     }
 
     const apiKey = process.env.RESEND_API_KEY?.trim()
-    if (!apiKey) {
+    const fromEmail = process.env.RESEND_FROM_EMAIL?.trim()
+    const toEmail = process.env.RESEND_TO_EMAIL?.trim()
+    if (!apiKey || !fromEmail || !toEmail) {
       return json(500, {
         validated: true, sent: false, error: 'El servicio de correo no está configurado.',
       })
@@ -91,8 +93,9 @@ export default {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'onboarding@resend.dev',
-          to: ['alexis12895@hotmail.com'],
+          from: fromEmail,
+          to: [toEmail],
+          reply_to: (data.email as string).trim(),
           subject: `Reathlet - Nueva solicitud - ${data.tipoPaciente}`,
           text: [
             `Tipo de paciente: ${data.tipoPaciente}`,

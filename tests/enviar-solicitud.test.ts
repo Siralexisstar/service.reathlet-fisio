@@ -4,19 +4,29 @@ import endpoint from '../api/enviar-solicitud.js'
 
 const valid = { tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com' }
 const fakeApiKey = 'test-resend-key-not-a-real-secret'
-let previousApiKey: string | undefined
+const fakeConfiguration = {
+  RESEND_API_KEY: fakeApiKey,
+  RESEND_FROM_EMAIL: 'sender@example.com',
+  RESEND_TO_EMAIL: 'appointments@example.com',
+}
+let previousEnvironment: Record<string, string | undefined> = {}
 
 beforeEach(() => {
-  previousApiKey = process.env.RESEND_API_KEY
-  process.env.RESEND_API_KEY = fakeApiKey
+  previousEnvironment = {}
+  for (const [name, value] of Object.entries(fakeConfiguration)) {
+    previousEnvironment[name] = process.env[name]
+    process.env[name] = value
+  }
   // Replace fetch before every test: no test can send a real email.
   mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
 })
 
 afterEach(() => {
   mock.restoreAll()
-  if (previousApiKey === undefined) delete process.env.RESEND_API_KEY
-  else process.env.RESEND_API_KEY = previousApiKey
+  for (const [name, value] of Object.entries(previousEnvironment)) {
+    if (value === undefined) delete process.env[name]
+    else process.env[name] = value
+  }
 })
 
 function post(body: unknown) {
@@ -37,7 +47,7 @@ async function failure(response: Response, status: number, validated = false) {
   return body
 }
 
-test('sends both patient types to the fixed recipient and confirms acceptance, not delivery', async () => {
+test('uses server-configured from/to and the validated patient reply_to for both patient types', async () => {
   const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
   for (const tipoPaciente of ['NUEVO', 'HABITUAL']) {
     const response = await post({ ...valid, tipoPaciente })
@@ -60,8 +70,9 @@ test('sends both patient types to the fixed recipient and confirms acceptance, n
       Authorization: `Bearer ${fakeApiKey}`, 'Content-Type': 'application/json',
     })
     assert.deepEqual(JSON.parse(options.body as string), {
-      from: 'onboarding@resend.dev',
-      to: ['alexis12895@hotmail.com'],
+      from: fakeConfiguration.RESEND_FROM_EMAIL,
+      to: [fakeConfiguration.RESEND_TO_EMAIL],
+      reply_to: valid.email,
       subject: `Reathlet - Nueva solicitud - ${tipoPaciente}`,
       text: `Tipo de paciente: ${tipoPaciente}\nNombre: ${valid.nombre}\nCorreo electrónico: ${valid.email}`,
     })
@@ -77,8 +88,21 @@ test('accepts boundary lengths and surrounding spaces in contact fields', async 
   assert.equal((await post({ ...valid, nombre: 'a'.repeat(160), email })).status, 200)
   assert.equal((await post({ ...valid, nombre: ' Paciente ficticio ', email: ' prueba@example.com ' })).status, 200)
   const [, options] = resend.mock.calls[1].arguments as unknown as [string, RequestInit]
+  assert.equal(JSON.parse(options.body as string).reply_to, valid.email)
   assert.equal(JSON.parse(options.body as string).text,
     `Tipo de paciente: NUEVO\nNombre: ${valid.nombre}\nCorreo electrónico: ${valid.email}`)
+})
+
+test('reads from/to at request time and trims the configured values', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  process.env.RESEND_FROM_EMAIL = ' Reathlet <sender@example.org> '
+  process.env.RESEND_TO_EMAIL = ' test-inbox@example.org '
+  assert.equal((await post(valid)).status, 200)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  const payload = JSON.parse(options.body as string)
+  assert.equal(payload.from, 'Reathlet <sender@example.org>')
+  assert.deepEqual(payload.to, ['test-inbox@example.org'])
+  assert.equal(payload.reply_to, valid.email)
 })
 
 test('rejects invalid structure, missing fields, wrong types, empty values and excessive lengths', async () => {
@@ -93,6 +117,7 @@ test('rejects invalid structure, missing fields, wrong types, empty values and e
       `${'a'.repeat(65)}@example.com`, `${'a'.repeat(243)}@example.com`].map(email => ({ ...valid, email })),
     { ...valid, historia: 'Información ficticia' }, { ...valid, firma: 'Firma ficticia' },
     { ...valid, to: 'another@example.com' }, { ...valid, destinatario: 'another@example.com' },
+    { ...valid, from: 'another@example.com' }, { ...valid, reply_to: 'another@example.com' },
   ]
   for (const body of invalidBodies) {
     const response = await post(body)
@@ -138,12 +163,17 @@ test('rejects methods other than POST and advertises the allowed method', async 
 
 test('rejects missing or blank server configuration without contacting Resend', async () => {
   const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
-  for (const value of [undefined, '', '   ']) {
-    if (value === undefined) delete process.env.RESEND_API_KEY
-    else process.env.RESEND_API_KEY = value
-    const result = await failure(await post(valid), 500, true)
-    assert.ok('error' in result && result.error === 'El servicio de correo no está configurado.')
-    await failure(await post({}), 400)
+  for (const [name, configuredValue] of Object.entries(fakeConfiguration)) {
+    for (const value of [undefined, '', '   ']) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+      const result = await failure(await post(valid), 500, true)
+      assert.deepEqual(result, {
+        validated: true, sent: false, error: 'El servicio de correo no está configurado.',
+      })
+      await failure(await post({}), 400)
+      process.env[name] = configuredValue
+    }
   }
   assert.equal(resend.mock.callCount(), 0)
 })

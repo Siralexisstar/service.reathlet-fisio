@@ -61,9 +61,12 @@ to the original strings. Control characters, extra fields (including medical dat
 or signatures), and bodies larger than 4096 UTF-8 bytes are rejected. Use fictional
 contact data. After validation, the handler sends the contact fields to Resend's
 official `POST https://api.resend.com/emails` API using Node's built-in `fetch`.
-It sends plain text from `onboarding@resend.dev` to the fixed test recipient
-`alexis12895@hotmail.com`, with subject `Reathlet - Nueva solicitud - NUEVO` or
-`Reathlet - Nueva solicitud - HABITUAL`. The client cannot set the recipient.
+It sends plain text from the server's `RESEND_FROM_EMAIL` to its
+`RESEND_TO_EMAIL`, with subject `Reathlet - Nueva solicitud - NUEVO` or
+`Reathlet - Nueva solicitud - HABITUAL`. The client cannot set the sender or recipient.
+`Reply-To` (`reply_to` in Resend's HTTP API) is the validated, trimmed patient
+email, so replying to the notification addresses the patient. The message still
+contains the patient type, name and email; no clinical data is included.
 The handler does not persist or log personal data, and responses do not echo it.
 Email validation checks format, not ownership.
 
@@ -93,9 +96,31 @@ or an appointment; repeated manual POSTs can send duplicate emails.
 ### Local API development
 
 `npm run dev` starts Vite and does **not** run the Vercel Function. To test the
-actual HTTP route, keep `RESEND_API_KEY` in the ignored root `.env.local` file.
-The handler reads it exclusively through `process.env.RESEND_API_KEY`; never use
-a `VITE_*` variable for this secret. Restart the server after changing it.
+actual HTTP route, configure these three **server-only** variables in the ignored
+root `.env.local` file:
+
+| Variable | Purpose | Example (not a real configuration) |
+| --- | --- | --- |
+| `RESEND_API_KEY` | Private Resend API credential | `replace_with_your_resend_api_key` |
+| `RESEND_FROM_EMAIL` | Sender permitted by Resend | `onboarding@resend.dev` |
+| `RESEND_TO_EMAIL` | Single notification recipient, controlled by the server | `test-inbox@example.com` |
+
+[`.env.example`](.env.example) contains placeholders only. Add the two address
+variables to an existing `.env.local`, preserving its private key; do not overwrite
+that file with the example. If no `.env.local` exists, copy the example and replace
+the placeholders privately. None of the example addresses is a working test inbox.
+The handler reads these values exclusively through `process.env`, trimming outer
+whitespace. If any variable is missing, empty or whitespace-only, valid requests
+return the existing 500 JSON error with `validated: true` and `sent: false`, without
+contacting Resend or exposing configuration values. Invalid input still returns
+the normal validation error first. Never use `VITE_*` variables for these values.
+Restart the server after changing `.env.local`.
+
+Keep a **test inbox** as the recipient while the current UI and privacy notices
+describe test sending. The sender must be allowed by Resend; the trial sender
+`onboarding@resend.dev` has provider restrictions. Use your authorised test sender
+and recipient, or a verified sending domain. Invalid provider configuration is
+handled by the existing generic 502 response, without exposing provider details.
 
 In this environment, plain `npx vercel dev --listen 3000` did **not** make the key
 available in the function runtime. Starting the CLI through Node with
@@ -119,7 +144,7 @@ See the official
 [Resend send-email API](https://resend.com/docs/api-reference/emails/send-email).
 
 Only after reviewing the implementation, run this in another PowerShell terminal
-to **send a real test email** to the fixed recipient:
+to **send a real test email** to the server-configured recipient:
 
 ```powershell
 '{"tipoPaciente":"NUEVO","nombre":"Paciente ficticio","email":"prueba@example.com"}' |
@@ -128,10 +153,13 @@ to **send a real test email** to the fixed recipient:
 
 Expect `validated: true` and `sent: true` only if Resend accepts the email. An
 empty name, invalid email or extra field returns 400 without contacting Resend.
-GET returns 405 without contacting Resend. If 500 occurs, check that the key is
-present and the server was restarted with the command above. For 502, review the
+GET returns 405 without contacting Resend. If 500 occurs, check that all three
+variables are set and the server was restarted with the command above. For 502, review the
 Resend dashboard privately; this can include an invalid key, provider limits or
-test-sender restrictions. Do not print the key or paste it into diagnostics.
+test-sender restrictions. Verify the notification's sender and recipient, then use
+**Reply** in your mail client to check that `Reply-To` selects the fictional patient
+address; inspecting the reply draft does not require sending it. Confirm the
+patient name and type remain in the message. Do not print the key or paste it into diagnostics.
 `npm test` checks the handler and React first-visit flow without Vercel authentication.
 It uses the installed TypeScript compiler and Node test runner, emitting temporary
 JavaScript under `node_modules/.tmp/api-tests`; no test dependencies are added.
@@ -161,7 +189,8 @@ WhatsApp remains an alternative. Existing patients retain their previous WhatsAp
 and email-draft flow; they do not call this API. Notices in the flow, footer and
 linked privacy pages describe the real email to a **test inbox**, while clinical
 fields and signatures remain a local demonstration. Nothing in React contains
-the provider key. The API and its fixed test recipient are unchanged.
+the provider key or the server's sender/recipient configuration. The API contract
+is unchanged; the recipient is selected exclusively through server configuration.
 
 For a complete manual browser test:
 
@@ -195,7 +224,7 @@ administrative data only; medical data and signatures remain outside this API's 
 
 Requests are still a demonstration, as in the original proposal. Use fictional data.
 The form and signature remain in memory and are discarded when the dialog closes;
-the email API is connected only to first visits and uses a fixed test recipient.
+the email API is connected only to first visits and uses a server-configured test recipient.
 There is no real booking system. The UI reports email acceptance, not delivery
 or an appointment reservation.
 
