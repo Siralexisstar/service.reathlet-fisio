@@ -2833,6 +2833,10 @@ textarea.field-input {
   background:#e9f4ed
 }
 
+.first-visit-email .message-body p {
+  overflow-wrap:anywhere
+}
+
 .preview-actions {
   flex-wrap:wrap;
   gap:10px;

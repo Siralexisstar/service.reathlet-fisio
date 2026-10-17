@@ -1,4 +1,25 @@
 {
+  "bookingEmail": {
+    "notice": "Sending a first-visit request by email sends your name and email address to a test inbox. Clinical information and signatures stay in memory and are cleared when you close the form. No appointment is confirmed.",
+    "consentInfo": "Clinical information and signatures are for demonstration: they stay in memory and are cleared when you close the form. At the final step, you can send only your name and email address to request a first visit. This real email goes to a test inbox and does not book an appointment or record this consent.",
+    "ready": "Form completed. Your request has not been sent yet.",
+    "channelHint": "First visit by email: a real email to a test inbox, containing only your name and email address.",
+    "previewText": "Review your details and press Send request to send a test email from this website.",
+    "title": "Your first-visit request",
+    "recipient": "Destination: test inbox",
+    "testBadge": "TEST",
+    "patientType": "Patient type",
+    "name": "Name",
+    "email": "Email address",
+    "onlyContact": "Only these contact details are sent. Clinical information and signatures are excluded.",
+    "send": "Send request",
+    "sending": "Sending request…",
+    "sentButton": "Request sent",
+    "retry": "Retry sending",
+    "success": "The email service has accepted the email to the test inbox. Delivery is not confirmed and your appointment still awaits confirmation.",
+    "error": "We could not confirm the send. Your details remain in this form so you can retry or contact us on WhatsApp.",
+    "whatsapp": "Contact on WhatsApp"
+  },
   "common": {
     "skipToContent": "Skip to content",
     "home": "Reathlet, home",
@@ -87,7 +108,7 @@
     "whatsapp": "Contact us on WhatsApp",
     "floating": "Let's talk"
   },
-  "footer": { "tagline": "Movement is part of you.<br/>Caring for it is how we support you.", "legal": "Legal information", "prototype": "Initial proposal · Sample professional details and hours. Form requests and signatures are simulated." },
+  "footer": { "tagline": "Movement is part of you.<br/>Caring for it is how we support you.", "legal": "Legal information", "prototype": "Initial proposal · Use fictional data. First-visit requests can send real email to a test inbox. Signatures are for demonstration; no appointments are confirmed." },
   "booking": { "eyebrow": "REATHLET · WITH YOU FROM THE START", "chooseTitle": "Shall we get to know each other?", "chooseText": "Choose the option that best describes you.", "dataTitle": "Let's start with you.", "dataText": "Only what we need to prepare your first contact.", "reasonTitle": "Tell us a little.", "reasonText": "You do not need a diagnosis. Tell us what you would like to recover.", "consentTitle": "Your peace of mind matters.", "consentText": "Read the information and sign to continue.", "channelTitle": "How would you like to talk?", "channelText": "The clinic will confirm availability and price.", "previewTitle": "Your first step is ready.", "previewText": "WhatsApp will open so you can review and send your message.", "demoStrong": "Test with fictional data.", "demoText": "This demo does not save health data or signatures and does not create real appointments.", "firstVisit": "It is my first visit", "returning": "I am already a patient", "next": "Continue", "back": "Back", "explore": "Keep exploring", "review": "Review", "finish": "Back to the website", "step": "Step {{step}} of 3", "yourData": "Your details", "yourConsultation": "Your consultation", "consent": "Consent", "formError": "Review the marked fields before continuing." },
   "content": {
     "treatments": [

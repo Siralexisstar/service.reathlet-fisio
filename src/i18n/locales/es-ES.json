@@ -1,4 +1,25 @@
 {
+  "bookingEmail": {
+    "notice": "Al enviar por correo una primera visita, se enviarán tu nombre y email a un buzón de pruebas. La información clínica y la firma permanecen solo en memoria y se borran al cerrar. No se confirma ninguna cita.",
+    "consentInfo": "La información clínica y la firma son de demostración: permanecen en memoria y se borran al cerrar. En el paso final puedes enviar solo tu nombre y email para solicitar una primera visita. Ese correo real se dirige a un buzón de pruebas y no registra una cita ni este consentimiento.",
+    "ready": "Formulario completado. La solicitud aún no se ha enviado.",
+    "channelHint": "Primera visita por correo: envío real a un buzón de pruebas, solo con tu nombre y email.",
+    "previewText": "Revisa tus datos y pulsa Enviar solicitud para enviar un correo de prueba desde esta web.",
+    "title": "Tu solicitud de primera visita",
+    "recipient": "Destino: buzón de pruebas",
+    "testBadge": "PRUEBA",
+    "patientType": "Tipo de paciente",
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "onlyContact": "Solo se envían estos datos de contacto. No se incluye información clínica ni firma.",
+    "send": "Enviar solicitud",
+    "sending": "Enviando solicitud…",
+    "sentButton": "Solicitud enviada",
+    "retry": "Reintentar envío",
+    "success": "El servicio de correo ha aceptado el envío al buzón de pruebas. La entrega no está confirmada y tu cita sigue pendiente de confirmación.",
+    "error": "No hemos podido confirmar el envío. Conservamos tus datos en este formulario para que puedas reintentar o contactar por WhatsApp.",
+    "whatsapp": "Contactar por WhatsApp"
+  },
   "common": {
     "skipToContent": "Saltar al contenido",
     "home": "Reathlet, inicio",
@@ -51,7 +72,7 @@
   "clinic": { "gallery": "Conoce nuestra consulta", "previous": "Fotografía anterior", "next": "Fotografía siguiente", "view": "Ver {{caption}}", "eyebrow": "CONOCE REATHLET", "title": "Tecnología que ayuda.<br/><span>Personas que escuchan.</span>", "paragraph1": "Detrás de cada lesión hay una persona y algo a lo que quiere volver. Entrenar, trabajar, pasear o simplemente moverse con más confianza.", "paragraph2": "En Reathlet combinamos la valoración clínica, la tecnología y el trabajo manual para acompañarte con un tratamiento que tiene sentido para ti.", "benefits": ["Tiempo para escucharte y resolver tus dudas.", "Explicaciones claras, sin tecnicismos innecesarios.", "Objetivos compartidos y seguimiento de tu evolución."], "team": "Tu equipo de fisioterapia", "speciality": "Fisioterapia deportiva y musculoesquelética", "registration": "N.º de colegiado: 00.000 · dato de muestra", "talk": "Hablemos de tu recuperación" },
   "faq": { "eyebrow": "CON TRANQUILIDAD, DESDE EL PRINCIPIO", "title": "Es normal<br/>tener preguntas.", "intro": "Estas son algunas de las más habituales antes de la primera visita." },
   "contactSection": { "eyebrow": "TU SIGUIENTE PASO EMPIEZA AQUÍ", "title": "Hacemos sitio<br/>a tu recuperación.", "intro": "Cuéntanos qué te gustaría volver a hacer.<br/>Nosotros te ayudamos a dar el primer paso.", "firstVisit": "Es mi primera visita", "returning": "Ya soy paciente", "note": "Solicitud sin compromiso. Cita sujeta a confirmación.", "findUs": "Nos encontrarás en Cornellà", "directions": "Cómo llegar", "schedule": "Un horario que encaje contigo", "hours": "Lunes a viernes · 09:00–14:00 y 16:00–20:00<br/>Sábado · 10:00–14:00<br/>Domingo · Cerrado", "sampleHours": "Horario de atención.", "talk": "Hablemos", "whatsapp": "Contactar por WhatsApp", "floating": "Hablemos" },
-  "footer": { "tagline": "El movimiento es parte de ti.<br/>Cuidarlo es nuestra forma de acompañarte.", "legal": "Información legal", "prototype": "Propuesta inicial · Datos profesionales y horarios de muestra. Las solicitudes y firmas del formulario se simulan." },
+  "footer": { "tagline": "El movimiento es parte de ti.<br/>Cuidarlo es nuestra forma de acompañarte.", "legal": "Información legal", "prototype": "Propuesta inicial · Usa datos ficticios. La primera visita puede enviar un correo real a un buzón de pruebas. Las firmas son de demostración; no se confirman citas." },
   "booking": { "eyebrow": "REATHLET · CONTIGO DESDE EL PRINCIPIO", "chooseTitle": "¿Nos conocemos?", "chooseText": "Elige la opción que mejor te representa.", "dataTitle": "Empezamos por ti.", "dataText": "Solo lo necesario para preparar tu primer contacto.", "reasonTitle": "Cuéntanos un poquito.", "reasonText": "No hace falta un diagnóstico. Cuéntanos qué te gustaría recuperar.", "consentTitle": "Tu tranquilidad importa.", "consentText": "Lee la información y firma para continuar.", "channelTitle": "¿Cómo prefieres hablar?", "channelText": "La clínica te confirmará disponibilidad y precio.", "previewTitle": "Tu primer paso, preparado.", "previewText": "Se abrirá WhatsApp para que revises y envíes tu mensaje.", "demoStrong": "Prueba con datos ficticios.", "demoText": "Esta demo no guarda datos de salud ni firmas y no crea citas reales.", "firstVisit": "Es mi primera visita", "returning": "Ya soy paciente", "next": "Continuar", "back": "Atrás", "explore": "Seguir explorando", "review": "Revisar", "finish": "Volver a la web", "step": "Paso {{step}} de 3", "yourData": "Tus datos", "yourConsultation": "Tu consulta", "consent": "Consentimiento", "formError": "Revisa los campos marcados antes de continuar." },
   "treatmentCategories": { "mobility": "Movilidad y función", "assessment": "Valoración", "functionalRecovery": "Recuperación funcional", "guided": "Técnica ecoguiada", "pain": "Dolor y función", "muscleTreatment": "Tratamiento muscular", "muscleCare": "Cuidado muscular", "technology": "Tecnología terapéutica" }
 }

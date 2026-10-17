@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# VS Code workspace
+*.code-workspace
+.vercel

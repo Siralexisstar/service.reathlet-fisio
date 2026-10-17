@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.api.tsbuildinfo",
+    "strict": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./node_modules/.tmp/api-tests"
+  },
+  "include": ["api/**/*.ts", "tests/**/*.ts"]
+}
