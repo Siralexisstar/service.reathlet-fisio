@@ -103,7 +103,7 @@ async function preview() {
   await click(button('Ver mi solicitud'))
 }
 
-test('requires contact validation and consent before an explicit send, sends only three fields and blocks duplicate clicks', async () => {
+test('requires contact validation and consent before an explicit send, sends only contact fields and blocks duplicate clicks', async () => {
   let accept
   const resend = mock.method(globalThis, 'fetch', () => new Promise(resolve => { accept = resolve }))
   await mount()
@@ -126,9 +126,10 @@ test('requires contact validation and consent before an explicit send, sends onl
   const [url, options] = resend.mock.calls[0].arguments
   assert.equal(url, '/api/enviar-solicitud')
   assert.equal(options.method, 'POST')
-  assert.deepEqual(options.headers, { 'Content-Type': 'application/json' })
+  assert.deepEqual(options.headers, { 'Content-Type': 'application/json', 'Idempotency-Key': options.headers['Idempotency-Key'] })
+  assert.match(options.headers['Idempotency-Key'], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   assert.deepEqual(JSON.parse(options.body), {
-    tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com',
+    tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com', website: '',
   })
   await act(async () => accept(Response.json({ validated: true, sent: true })))
   assert.match(container.querySelector('[role="status"]').textContent, /aceptado.*pendiente de confirmación/)
@@ -144,6 +145,7 @@ test('requires contact validation and consent before an explicit send, sends onl
 for (const [name, response] of [
   ['HTTP validation error', () => Response.json({ sent: false }, { status: 400 })],
   ['HTTP provider error', () => Response.json({ sent: false }, { status: 502 })],
+  ['HTTP idempotency conflict', () => Response.json({ sent: false }, { status: 409 })],
   ['HTTP failure even with sent true', () => Response.json({ sent: true }, { status: 500 })],
   ['unconfirmed send', () => Response.json({ validated: true, sent: false })],
   ['invalid JSON', () => new Response('<html>Not an API response</html>')],
@@ -163,6 +165,7 @@ for (const [name, response] of [
     await click(button('Reintentar envío'))
     assert.equal(request.mock.callCount(), 2)
     assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+    assert.equal(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
     assert.equal(button('Solicitud enviada').disabled, true)
   })
 }
@@ -179,6 +182,78 @@ test('preserves contact values when going back after an error and clears them on
   await mount()
   assert.equal(container.querySelector('#name').value, '')
   assert.equal(container.querySelector('#email').value, '')
+})
+
+test('honeypot is hidden from sight, keyboard and accessibility and is included only in the API request', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 400 }))
+  await mount()
+  const trap = container.querySelector('input[name="website"]')
+  assert.ok(trap.closest('[hidden][aria-hidden="true"]'))
+  assert.equal(trap.tabIndex, -1)
+  assert.equal(trap.autocomplete, 'off')
+  await fill('booking-website', 'bot')
+  await preview()
+  await click(button('Enviar solicitud'))
+  assert.equal(JSON.parse(request.mock.calls[0].arguments[1].body).website, 'bot')
+  assert.match(container.querySelector('[role="alert"]').textContent, /No hemos podido confirmar/)
+})
+
+test('editing contact changes the identifier, even if restored; reopening starts another request', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview()
+  await click(button('Enviar solicitud'))
+  const originalKey = request.mock.calls[0].arguments[1].headers['Idempotency-Key']
+  await click(button('Atrás'))
+  await click(button('Revisar'))
+  await fill('email', 'changed@example.com')
+  await fill('email', 'prueba@example.com')
+  await click(button('Continuar'))
+  await click(button('Continuar'))
+  await click(button('Firmar y continuar'))
+  await click(button('Ver mi solicitud'))
+  await click(button('Reintentar envío'))
+  const changedKey = request.mock.calls[1].arguments[1].headers['Idempotency-Key']
+  assert.notEqual(changedKey, originalKey)
+  assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+  await act(async () => root.render(null))
+  await mount()
+  await preview()
+  await click(button('Enviar solicitud'))
+  const newKey = request.mock.calls[2].arguments[1].headers['Idempotency-Key']
+  assert.notEqual(newKey, changedKey)
+  assert.notEqual(newKey, originalKey)
+})
+
+test('frontend source does not reference private server configuration or the provider API', async () => {
+  const { readdir } = await import('node:fs/promises')
+  async function checkSources(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const file = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory)
+      if (entry.isDirectory()) await checkSources(file)
+      else if (/\.(ts|tsx)$/.test(entry.name)) {
+        assert.doesNotMatch(await readFile(file, 'utf8'), /RESEND_(API_KEY|FROM_EMAIL|TO_EMAIL)|api\.resend\.com/)
+      }
+    }
+  }
+  await checkSources(new URL('../src/', import.meta.url))
+})
+
+test('choosing a new first visit in the same dialog starts a new identifier without contact edits', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview()
+  await click(button('Enviar solicitud'))
+  for (let step = 0; step < 5; step++) await click(button('Atrás'))
+  await click(button('Es mi primera visitaUn formulario breve para conocerte mejor.Datos, motivo de consulta y consentimiento.'))
+  await click(button('Continuar'))
+  await click(button('Continuar'))
+  await click(button('Firmar y continuar'))
+  await click(button('Ver mi solicitud'))
+  await click(button('Enviar solicitud'))
+  assert.equal(request.mock.callCount(), 2)
+  assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+  assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
 })
 
 test('existing patients keep the mail draft and WhatsApp paths without calling the API', async () => {

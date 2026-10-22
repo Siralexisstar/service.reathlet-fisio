@@ -80,7 +80,9 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   const [channel, setChannel] = useState<Channel | undefined>(intent.channel)
   const [copyStatus, setCopyStatus] = useState('')
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [website, setWebsite] = useState('')
   const emailLocked = useRef(false)
+  const emailRequestId = useRef<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const formStep = ['data', 'reason', 'consent'].indexOf(step) + 1
@@ -91,6 +93,7 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   useEffect(() => { heading.current?.focus({ preventScroll: true }); content.current?.scrollTo(0, 0) }, [step])
 
   function update<K extends keyof Intake>(key: K, value: Intake[K]) {
+    if ((key === 'name' || key === 'email') && values[key] !== value) emailRequestId.current = null
     setValues(previous => ({ ...previous, [key]: value }))
     setErrors(previous => ({ ...previous, [key]: undefined }))
   }
@@ -136,11 +139,12 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
     emailLocked.current = true
     setEmailStatus('sending')
     try {
+      emailRequestId.current ??= crypto.randomUUID()
       const response = await fetch('/api/enviar-solicitud', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': emailRequestId.current },
         // Keep this allowlist explicit: never spread the intake or send clinical fields.
-        body: JSON.stringify({ tipoPaciente: 'NUEVO', nombre: values.name.trim(), email: values.email.trim() }),
+        body: JSON.stringify({ tipoPaciente: 'NUEVO', nombre: values.name.trim(), email: values.email.trim(), website }),
         signal: AbortSignal.timeout(20_000),
       })
       const result: unknown = await response.json()
@@ -168,8 +172,9 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
     {formStep > 0 && <div className="form-progress"><div><span>Paso {formStep} de 3</span><span>{['Tus datos', 'Tu consulta', 'Consentimiento'][formStep - 1]}</span></div><div className="intake-progress" role="progressbar" aria-label={`Paso ${formStep} de 3`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(formStep / 3 * 100)}><div data-slot="progress-indicator" style={{ width: `${formStep / 3 * 100}%`, height: '100%' }} /></div></div>}
     <div ref={content} className="booking-content">
       <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>{t('booking.demoStrong')}</strong> {patient === 'returning' ? 'Esta demo no guarda datos de salud ni firmas y no crea citas reales.' : t('bookingEmail.notice')}</p></div>
-      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => { setPatient('new'); setCompleted(false); changeStep('data') }}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>Es mi primera visita</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => { setPatient('returning'); changeStep('channel') }}><span className="choice-icon"><Icon name="chat" /></span><span><strong>Ya soy paciente</strong><small>Contacta para pedir una nueva cita.</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
+      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => { setPatient('new'); setCompleted(false); setEmailStatus('idle'); emailRequestId.current = null; changeStep('data') }}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>Es mi primera visita</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => { setPatient('returning'); changeStep('channel') }}><span className="choice-icon"><Icon name="chat" /></span><span><strong>Ya soy paciente</strong><small>Contacta para pedir una nueva cita.</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
       {formStep > 0 && <form id="intake-form" onSubmit={submit} noValidate>
+        <div hidden aria-hidden="true"><input type="text" id="booking-website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => { setWebsite(event.target.value); emailRequestId.current = null }} /></div>
         {Object.values(errors).some(Boolean) && <div className="error-summary" role="alert">Revisa los campos marcados antes de continuar.</div>}
         {step === 'data' && <>
           <h3 className="sr-only">Tus datos de contacto</h3>

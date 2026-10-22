@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import test, { afterEach, beforeEach, mock } from 'node:test'
 import endpoint from '../api/enviar-solicitud.js'
 
@@ -29,10 +30,10 @@ afterEach(() => {
   }
 })
 
-function post(body: unknown) {
+function post(body: unknown, requestId: string | null = randomUUID()) {
   return endpoint.fetch(new Request('http://localhost/api/enviar-solicitud', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...(requestId !== null && { 'Idempotency-Key': requestId }) },
     body: JSON.stringify(body),
   }))
 }
@@ -66,8 +67,11 @@ test('uses server-configured from/to and the validated patient reply_to for both
     const tipoPaciente = ['NUEVO', 'HABITUAL'][index]
     assert.equal(url, 'https://api.resend.com/emails')
     assert.equal(options.method, 'POST')
+    const idempotencyKey = (options.headers as Record<string, string>)['Idempotency-Key']
+    assert.match(idempotencyKey, /^reathlet-solicitud\/[0-9a-f-]{36}$/)
     assert.deepEqual(options.headers, {
       Authorization: `Bearer ${fakeApiKey}`, 'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
     })
     assert.deepEqual(JSON.parse(options.body as string), {
       from: fakeConfiguration.RESEND_FROM_EMAIL,
@@ -78,6 +82,59 @@ test('uses server-configured from/to and the validated patient reply_to for both
     })
     assert.ok(options.signal instanceof AbortSignal)
     assert.equal(options.redirect, 'error')
+  }
+})
+
+test('accepts an empty optional honeypot but rejects filled or invalid values without contacting Resend', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  assert.equal((await post({ ...valid, website: '' })).status, 200)
+  assert.equal(resend.mock.callCount(), 1)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  assert.equal('website' in JSON.parse(options.body as string), false)
+  for (const website of ['bot', ' ', 'x'.repeat(4096), null, false, 1, [], {}]) {
+    const response = await post({ ...valid, website })
+    await failure(response, website === 'x'.repeat(4096) ? 413 : 400)
+  }
+  const result = await (await post({ ...valid, website: 'bot' })).json()
+  assert.deepEqual(result, { validated: false, sent: false, error: 'No se ha podido procesar la solicitud.' })
+  assert.equal(resend.mock.callCount(), 1)
+})
+
+test('requires a UUID v4 idempotency header and rejects incorrect identifiers before contacting Resend', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
+  for (const id of [null, '', 'not-a-uuid', valid.email, 'x'.repeat(257),
+    '00000000-0000-0000-0000-000000000000', '12345678-1234-4123-0123-123456789abc',
+    `${randomUUID()},${randomUUID()}`]) {
+    await failure(await post(valid, id), 400)
+  }
+  assert.equal(resend.mock.callCount(), 0)
+})
+
+test('retries forward the same canonical key and email payload; a new request gets another key', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const id = randomUUID()
+  for (const key of [id, id, id.toUpperCase(), randomUUID()]) {
+    assert.equal((await post(valid, key)).status, 200)
+  }
+  const calls = resend.mock.calls.map(call => (call.arguments as unknown as [string, RequestInit])[1])
+  const keys = calls.map(call => (call.headers as Record<string, string>)['Idempotency-Key'])
+  assert.deepEqual(keys.slice(0, 3), Array(3).fill(`reathlet-solicitud/${id}`))
+  assert.notEqual(keys[0], keys[3])
+  assert.ok(calls.every(call => call.body === calls[0].body))
+  assert.equal(resend.mock.callCount(), 4) // Deduplication belongs to Resend, not local function state.
+})
+
+test('provider idempotency conflicts have controlled responses without internal details', async () => {
+  for (const name of ['invalid_idempotent_request', 'concurrent_idempotent_requests']) {
+    const resend = mock.method(globalThis, 'fetch', async () => Response.json({
+      name, message: `Internal details: ${fakeApiKey} ${valid.email}`,
+    }, { status: 409 }))
+    const result = await failure(await post(valid), 409, true)
+    assert.deepEqual(result, {
+      validated: true, sent: false,
+      error: 'No se ha podido completar el envío. Revisa la solicitud e inténtalo de nuevo.',
+    })
+    assert.equal(resend.mock.callCount(), 1)
   }
 })
 

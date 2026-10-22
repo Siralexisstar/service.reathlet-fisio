@@ -9,6 +9,7 @@ type Solicitud = {
 type FieldErrors = Partial<Record<keyof Solicitud, string>>
 
 const emailPattern = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i
+const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function json(status: number, body: object, headers: Record<string, string> = {}) {
   return Response.json(body, {
@@ -53,12 +54,15 @@ export default {
       return invalid('El cuerpo debe ser un objeto JSON.')
     }
 
-    const allowedFields = ['tipoPaciente', 'nombre', 'email']
+    const allowedFields = ['tipoPaciente', 'nombre', 'email', 'website']
     if (Object.keys(body).some(key => !allowedFields.includes(key))) {
-      return invalid('Solo se permiten tipoPaciente, nombre y email. No incluyas información médica ni firmas.')
+      return invalid('La solicitud contiene campos no admitidos. No incluyas información médica ni firmas.')
     }
 
     const data = body as Record<string, unknown>
+    if ('website' in data && data.website !== '') {
+      return invalid('No se ha podido procesar la solicitud.')
+    }
     const fields: FieldErrors = {}
     if (data.tipoPaciente !== 'NUEVO' && data.tipoPaciente !== 'HABITUAL') {
       fields.tipoPaciente = 'Debe ser NUEVO o HABITUAL.'
@@ -76,6 +80,11 @@ export default {
       return invalid('Revisa los campos obligatorios.', fields)
     }
 
+    const requestId = request.headers.get('Idempotency-Key')
+    if (!requestId || !requestIdPattern.test(requestId)) {
+      return invalid('El identificador de la solicitud no es válido.')
+    }
+
     const apiKey = process.env.RESEND_API_KEY?.trim()
     const fromEmail = process.env.RESEND_FROM_EMAIL?.trim()
     const toEmail = process.env.RESEND_TO_EMAIL?.trim()
@@ -91,6 +100,7 @@ export default {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'Idempotency-Key': `reathlet-solicitud/${requestId.toLowerCase()}`,
         },
         body: JSON.stringify({
           from: fromEmail,
@@ -106,6 +116,13 @@ export default {
         signal: AbortSignal.timeout(10_000),
         redirect: 'error',
       })
+      if (response.status === 409) {
+        return json(409, {
+          validated: true,
+          sent: false,
+          error: 'No se ha podido completar el envío. Revisa la solicitud e inténtalo de nuevo.',
+        })
+      }
       // An HTTP success alone does not confirm acceptance: Resend must return an id.
       const result: unknown = response.ok ? await response.json() : null
       if (typeof result === 'object' && result !== null && 'id' in result

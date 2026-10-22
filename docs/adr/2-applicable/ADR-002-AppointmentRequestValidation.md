@@ -76,6 +76,33 @@ contact-only email sending to the test inbox.
 Use jsdom as a development-only dependency with the existing Vite loader and Node
 test runner to exercise the actual component. Mock outgoing HTTP in every test.
 
+## Extension: Honeypot and provider idempotency (iteration 4)
+
+Keep the existing validations, private environment configuration, Reply-To,
+contact-only provider payload, timeouts and per-dialog click guard. Add an optional
+`website` body field which must be exactly empty when supplied. Render its text
+input in a hidden, aria-hidden container with no keyboard tab stop. Reject filled
+or incorrectly typed values with a generic 400 and never forward them to Resend.
+This signal does not stop direct HTTP callers that omit it or leave it empty.
+
+Require an anonymous UUID v4 in the `Idempotency-Key` request header. This is an
+explicit contract extension for manual/legacy clients; preserve the existing
+contact fields and response structure. Generate the identifier in React at the
+first explicit send and retain it in a ref only for that dialog. Reuse it on
+retries; invalidate it on contact/honeypot edits or a new first visit, and discard
+it on closing. Do not derive identifiers from clinical or contact data.
+
+Forward a validated, canonical key as `reathlet-solicitud/<uuid>` in Resend's
+official `Idempotency-Key` header. Resend handles repeated identical payloads
+across separate function invocations for 24 hours. Map provider conflicts to
+controlled HTTP 409 JSON without exposing provider messages. Never work around
+a conflict by silently changing the identifier or automatically retrying.
+
+Do not introduce a database, Redis, server-local counters, caches or locks.
+Document a future per-IP Vercel WAF rule for POST on this path: initially five
+requests per 60 seconds with a 429 response, subject to production observation
+and plan review. No Vercel project is accessed or configured in this iteration.
+
 ## Consequences
 
 The API and UI can be tested without sending real email. The local API was manually
@@ -84,10 +111,11 @@ check. Vercel provides function routing separately from Vite's frontend assets;
 unit tests and `vite build` alone do not verify that integration.
 
 The current iteration uses local test sending configuration. Manual browser sending,
-production recipient/sender verification and server-side duplicate-request handling
-remain future work. Neither validation nor provider acceptance confirms inbox
-delivery or a booking. A new dialog session or retry after an uncertain network
-outcome can still send a duplicate; the click guard is local to the dialog.
+production recipient/sender verification and production WAF configuration remain
+future work. Neither validation nor provider acceptance confirms inbox delivery
+or a booking. Resend's guarantee is limited to the same key/payload for 24 hours;
+new dialogs, devices, contact changes or changed keys can send another email.
+Honeypot and idempotency do not authenticate callers or enforce a send quota.
 
 ## References
 
@@ -95,3 +123,5 @@ outcome can still send a duplicate; the click guard is local to the dialog.
 - [Vercel Node.js runtime](https://vercel.com/docs/functions/runtimes/node-js)
 - [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite)
 - [Resend send-email API](https://resend.com/docs/api-reference/emails/send-email)
+- [Resend idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys)
+- [Vercel WAF Rate Limiting](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting)
