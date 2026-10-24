@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test, { afterEach, beforeEach, mock } from 'node:test'
 import endpoint from '../api/enviar-solicitud.js'
+import { signatureDataUrl } from './png-fixture.js'
 
 const valid = { tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com' }
 const fakeApiKey = 'test-resend-key-not-a-real-secret'
@@ -9,6 +10,7 @@ const fakeConfiguration = {
   RESEND_API_KEY: fakeApiKey,
   RESEND_FROM_EMAIL: 'sender@example.com',
   RESEND_TO_EMAIL: 'appointments@example.com',
+  RESEND_FULL_FORM_ENABLED: 'false',
 }
 let previousEnvironment: Record<string, string | undefined> = {}
 
@@ -18,6 +20,7 @@ beforeEach(() => {
     previousEnvironment[name] = process.env[name]
     process.env[name] = value
   }
+  for (const name of ['NODE_ENV', 'VERCEL_ENV']) previousEnvironment[name] = process.env[name]
   // Replace fetch before every test: no test can send a real email.
   mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
 })
@@ -220,7 +223,7 @@ test('rejects methods other than POST and advertises the allowed method', async 
 
 test('rejects missing or blank server configuration without contacting Resend', async () => {
   const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
-  for (const [name, configuredValue] of Object.entries(fakeConfiguration)) {
+  for (const [name, configuredValue] of Object.entries(fakeConfiguration).filter(([name]) => name !== 'RESEND_FULL_FORM_ENABLED')) {
     for (const value of [undefined, '', '   ']) {
       if (value === undefined) delete process.env[name]
       else process.env[name] = value
@@ -266,4 +269,210 @@ test('handles network errors and timeouts without retrying or leaking error deta
     assert.equal(JSON.stringify(result).includes(fakeApiKey), false)
     assert.equal(JSON.stringify(result).includes(valid.email), false)
   }
+})
+
+function fullValid() {
+  return {
+    version: 2, ...valid, website: '',
+    administrativo: { telefono: '+34 600 000 000', preferenciaHoraria: 'Por la tarde', canal: 'EMAIL' },
+    clinico: { zona: 'Valoración general', duracion: 'Menos de una semana', motivo: 'Consulta ficticia de prueba', dolorActual: null as number | null, antecedentes: 'Antecedente ficticio', medicacionAlergias: 'Medicación ficticia' },
+    consentimientos: { privacidad: true, salud: true },
+    firma: { tipo: 'ESCRITA', texto: 'Firma ficticia' } as { tipo: string; texto?: string; png?: string },
+  }
+}
+
+test('full form is blocked without exact true in local and production environments', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  for (const environment of ['development', 'production']) {
+    process.env.NODE_ENV = environment
+    process.env.VERCEL_ENV = environment
+    for (const flag of [undefined, '', 'false', 'TRUE', 'True', '1', ' true', 'true ']) {
+      if (flag === undefined) delete process.env.RESEND_FULL_FORM_ENABLED
+      else process.env.RESEND_FULL_FORM_ENABLED = flag
+      const result = await failure(await post(fullValid()), 503, true)
+      assert.ok('code' in result && result.code === 'FULL_FORM_DISABLED')
+    }
+  }
+  assert.equal(resend.mock.callCount(), 0)
+})
+
+test('exact true allows full-form sending locally and with either or both production markers', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  for (const [nodeEnv, vercelEnv] of [
+    ['development', 'development'], ['production', 'development'],
+    ['development', 'production'], ['production', 'production'],
+  ]) {
+    process.env.NODE_ENV = nodeEnv
+    process.env.VERCEL_ENV = vercelEnv
+    const response = await post(fullValid())
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), {
+      validated: true, sent: true,
+      message: 'Resend ha aceptado el envío. La entrega al buzón no está confirmada.',
+    })
+  }
+  assert.equal(resend.mock.callCount(), 4)
+})
+
+test('legacy requests remain independent of the full-form flag in production', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  process.env.NODE_ENV = 'production'
+  process.env.VERCEL_ENV = 'production'
+  for (const flag of [undefined, 'false', 'true']) {
+    if (flag === undefined) delete process.env.RESEND_FULL_FORM_ENABLED
+    else process.env.RESEND_FULL_FORM_ENABLED = flag
+    for (const tipoPaciente of ['NUEVO', 'HABITUAL']) {
+      assert.equal((await post({ ...valid, tipoPaciente })).status, 200)
+    }
+  }
+  assert.equal(resend.mock.callCount(), 6)
+})
+
+test('full form sends all six sections as plain text, keeping technical fields out of the email', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const data = fullValid()
+  const id = randomUUID()
+  assert.equal((await post(data, id)).status, 200)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  const payload = JSON.parse(options.body as string)
+  assert.equal(payload.from, fakeConfiguration.RESEND_FROM_EMAIL)
+  assert.deepEqual(payload.to, [fakeConfiguration.RESEND_TO_EMAIL])
+  assert.equal(payload.reply_to, valid.email)
+  assert.equal(payload.subject, 'Reathlet - Nueva solicitud - NUEVO')
+  assert.deepEqual(Object.keys(payload), ['from', 'to', 'reply_to', 'subject', 'text'])
+  for (const value of [valid.nombre, valid.email, ...Object.values(data.administrativo), data.clinico.zona,
+    data.clinico.duracion, data.clinico.motivo, data.clinico.antecedentes, data.clinico.medicacionAlergias, data.firma.texto]) {
+    assert.ok(payload.text.includes(value))
+  }
+  for (const section of ['1. DATOS PERSONALES', '2. INFORMACIÓN', '3. MOTIVO', '4. ANTECEDENTES', '5. PRIVACIDAD', '6. FIRMA']) assert.ok(payload.text.includes(section))
+  assert.match(payload.text, /Intensidad del dolor: No indicado/)
+  assert.match(payload.text, /Lectura de privacidad: Sí/)
+  assert.match(payload.text, /Consentimiento para tratar información de salud: Sí/)
+  assert.doesNotMatch(payload.text, /website|Idempotency|data:image|<html>/)
+  assert.equal(payload.text.includes(id), false)
+})
+
+test('optional empty fields display No indicado; pain zero is an explicit answer', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const data = fullValid()
+  data.administrativo.telefono = ''
+  data.clinico.antecedentes = '  '
+  data.clinico.medicacionAlergias = ''
+  data.clinico.dolorActual = 0
+  assert.equal((await post(data)).status, 200)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  const { text } = JSON.parse(options.body as string)
+  assert.match(text, /Teléfono: No indicado/)
+  assert.match(text, /antecedentes: No indicado/)
+  assert.match(text, /alergias: No indicado/)
+  assert.match(text, /dolor: 0\/10/)
+})
+
+test('drawn signature becomes exactly one official base64 PNG attachment and retries are stable', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const data = fullValid()
+  data.firma = { tipo: 'DIBUJADA', png: signatureDataUrl() }
+  const id = randomUUID()
+  for (const key of [id, id, randomUUID()]) assert.equal((await post(data, key)).status, 200)
+  const calls = resend.mock.calls.map(call => (call.arguments as unknown as [string, RequestInit])[1])
+  assert.ok(calls.every(call => call.body === calls[0].body))
+  assert.deepEqual(calls[0].headers, calls[1].headers)
+  assert.notDeepEqual(calls[0].headers, calls[2].headers)
+  const payload = JSON.parse(calls[0].body as string)
+  assert.deepEqual(payload.attachments, [{ filename: 'firma-paciente.png', content: data.firma.png!.split(',')[1] }])
+  assert.match(payload.text, /Modalidad de firma: DIBUJADA/)
+  assert.equal(payload.text.includes('Firma ficticia'), false)
+  assert.equal(payload.text.includes('base64'), false)
+})
+
+test('full form validates required keys, enums, types, boundaries, consents and one signature only', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
+  const base = fullValid()
+  const cases: unknown[] = [
+    ...Object.keys(base).filter(key => key !== 'website').map(key => Object.fromEntries(Object.entries(base).filter(([name]) => name !== key))),
+    ...[null, [], 'text', false].flatMap(value => ['administrativo', 'clinico', 'consentimientos', 'firma'].map(key => ({ ...base, [key]: value }))),
+    { ...base, version: 1 }, { ...base, version: '2' }, { ...base, tipoPaciente: 'HABITUAL' },
+    { ...base, to: 'untrusted@example.com' }, { ...base, website: 'bot' },
+    { ...base, nombre: 'A' }, { ...base, nombre: 'x'.repeat(101) },
+    { ...base, email: `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(40)}.com` },
+  ]
+  const mutations: Record<string, Record<string, unknown[]>> = {
+    administrativo: { telefono: [null, 123, 'invalid', 'x'.repeat(21), '1234567\n'], preferenciaHoraria: ['', 'unknown', 1], canal: ['WHATSAPP', null], extra: ['unexpected'] },
+    clinico: { zona: ['', 'unknown', 1], duracion: ['', 'unknown', 1], motivo: ['', 'short', 'x'.repeat(1001), '\u0000texto ficticio', 1], dolorActual: ['', '3', -1, 11, 3.5, false], antecedentes: [null, 1, 'x'.repeat(1001)], medicacionAlergias: [null, 1, 'x'.repeat(301), 'line\nbreak'], extra: ['unexpected'] },
+    consentimientos: { privacidad: [false, 'true', 1], salud: [false, 'true', 1], extra: ['unexpected'] },
+    firma: { tipo: ['other', null], texto: ['', 'AB', 'x'.repeat(101), 'Nombre\r\nBcc: evil@example.com'], png: [signatureDataUrl()] },
+  }
+  for (const [section, fields] of Object.entries(mutations)) {
+    const original = base[section as keyof typeof base] as Record<string, unknown>
+    for (const key of Object.keys(original)) cases.push({ ...base, [section]: Object.fromEntries(Object.entries(original).filter(([name]) => name !== key)) })
+    for (const [field, values] of Object.entries(fields)) for (const value of values) cases.push({ ...base, [section]: { ...original, [field]: value } })
+  }
+  for (const body of cases) {
+    const response = await failure(await post(body), 400)
+    assert.equal(JSON.stringify(response).includes(base.clinico.motivo), false)
+    assert.equal(JSON.stringify(response).includes(valid.email), false)
+  }
+  assert.equal(resend.mock.callCount(), 0)
+})
+
+test('PNG at the decoded size limit is accepted and ancillary metadata is removed', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const clean = signatureDataUrl()
+  const cleanSize = Buffer.from(clean.split(',')[1], 'base64').length
+  const padded = signatureDataUrl(960, 300, undefined, 'x'.repeat(128 * 1024 - cleanSize - 12))
+  assert.equal(Buffer.from(padded.split(',')[1], 'base64').length, 128 * 1024)
+  assert.equal((await post({ ...fullValid(), firma: { tipo: 'DIBUJADA', png: padded } })).status, 200)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  assert.equal(JSON.parse(options.body as string).attachments[0].content, clean.split(',')[1])
+})
+
+test('drawn PNG validation rejects oversized, forged, truncated and incompatible images', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
+  const png = signatureDataUrl()
+  const corrupt = Buffer.from(png.split(',')[1], 'base64')
+  corrupt[corrupt.length - 1] ^= 1
+  for (const image of ['', 'https://example.com/image.png', 'data:image/svg+xml;base64,PHN2Zz4=',
+    'data:image/png;base64,aGVsbG8=', png.slice(0, -8), png + 'x', signatureDataUrl(1, 1),
+    `data:image/png;base64,${corrupt.toString('base64')}`, signatureDataUrl(960, 300, Buffer.alloc(1)),
+    signatureDataUrl(960, 300, Buffer.alloc((960 * 4 + 1) * 300 + 1)),
+    signatureDataUrl(960, 300, Buffer.alloc((960 * 4 + 1) * 300, 5)),
+    `data:image/png;base64,${Buffer.alloc(128 * 1024 + 1).toString('base64')}`]) {
+    await failure(await post({ ...fullValid(), firma: { tipo: 'DIBUJADA', png: image } }), 400)
+  }
+  await failure(await post({ ...fullValid(), firma: { tipo: 'DIBUJADA', png: `data:image/png;base64,${'A'.repeat(256 * 1024)}` } }), 413)
+  assert.equal(resend.mock.callCount(), 0)
+})
+
+test('v2 allows multiline text beyond legacy body size but does not create HTML or email headers', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
+  const data = fullValid()
+  data.clinico.motivo = `${'á'.repeat(900)}\nBcc: ficticio@example.com\n<script>example</script>`
+  data.clinico.antecedentes = 'á'.repeat(1000)
+  data.clinico.medicacionAlergias = 'á'.repeat(300)
+  assert.equal((await post(data)).status, 200)
+  const [, options] = resend.mock.calls[0].arguments as unknown as [string, RequestInit]
+  const payload = JSON.parse(options.body as string)
+  assert.match(payload.text, /\n {2}Bcc: ficticio@example.com/)
+  assert.equal('html' in payload || 'headers' in payload || 'bcc' in payload, false)
+  assert.equal(payload.reply_to, valid.email)
+})
+
+test('v2 provider errors, missing configuration and idempotency conflicts do not expose sensitive data', async () => {
+  process.env.RESEND_FULL_FORM_ENABLED = 'true'
+  const data = fullValid()
+  for (const status of [409, 429, 500]) {
+    mock.method(globalThis, 'fetch', async () => Response.json({ message: `${fakeApiKey} ${data.clinico.motivo} ${data.firma.texto}` }, { status }))
+    const result = await failure(await post(data), status === 409 ? 409 : 502, true)
+    for (const sensitive of [fakeApiKey, valid.email, data.clinico.motivo, data.firma.texto!]) assert.equal(JSON.stringify(result).includes(sensitive), false)
+  }
+  delete process.env.RESEND_API_KEY
+  await failure(await post(data), 500, true)
 })

@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { fullRequestText, maxFullBodyBytes, validateFullRequest } from '../server/first-visit.js'
 
 type Solicitud = {
   tipoPaciente: 'NUEVO' | 'HABITUAL'
@@ -22,6 +23,28 @@ function invalid(error: string, fields?: FieldErrors) {
   return json(400, { validated: false, sent: false, error, ...(fields && { fields }) })
 }
 
+async function readBody(request: Request) {
+  const reader = request.body?.getReader()
+  if (!reader) return ''
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > maxFullBodyBytes) {
+        await reader.cancel()
+        throw new RangeError('Body limit')
+      }
+      chunks.push(value)
+    }
+    return Buffer.concat(chunks).toString('utf8')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.method !== 'POST') {
@@ -38,15 +61,15 @@ export default {
     }
 
     let body: unknown
+    let bodyBytes: number
     try {
-      const text = await request.text()
-      if (Buffer.byteLength(text, 'utf8') > 4096) {
-        return json(413, {
-          validated: false, sent: false, error: 'El cuerpo no puede superar 4096 bytes.',
-        })
-      }
+      const text = await readBody(request)
+      bodyBytes = Buffer.byteLength(text, 'utf8')
       body = JSON.parse(text)
-    } catch {
+    } catch (error) {
+      if (error instanceof RangeError) return json(413, {
+        validated: false, sent: false, error: 'La solicitud supera el tamaño permitido.',
+      })
       return invalid('El cuerpo debe contener JSON válido.')
     }
 
@@ -54,12 +77,16 @@ export default {
       return invalid('El cuerpo debe ser un objeto JSON.')
     }
 
+    const data = body as Record<string, unknown>
+    const full = data.version === 2
+    if (!full && bodyBytes > 4096) return json(413, {
+      validated: false, sent: false, error: 'El cuerpo no puede superar 4096 bytes.',
+    })
     const allowedFields = ['tipoPaciente', 'nombre', 'email', 'website']
-    if (Object.keys(body).some(key => !allowedFields.includes(key))) {
+    if (!full && Object.keys(body).some(key => !allowedFields.includes(key))) {
       return invalid('La solicitud contiene campos no admitidos. No incluyas información médica ni firmas.')
     }
 
-    const data = body as Record<string, unknown>
     if ('website' in data && data.website !== '') {
       return invalid('No se ha podido procesar la solicitud.')
     }
@@ -80,9 +107,20 @@ export default {
       return invalid('Revisa los campos obligatorios.', fields)
     }
 
+    const fullRequest = full ? validateFullRequest(data) : null
+    if (full && !fullRequest) return invalid('Revisa los campos del formulario y la firma.')
+
     const requestId = request.headers.get('Idempotency-Key')
     if (!requestId || !requestIdPattern.test(requestId)) {
       return invalid('El identificador de la solicitud no es válido.')
+    }
+
+    // Opt in explicitly in every environment; all other values fail closed.
+    if (full && process.env.RESEND_FULL_FORM_ENABLED !== 'true') {
+      return json(503, {
+        validated: true, sent: false, code: 'FULL_FORM_DISABLED',
+        error: 'El envío del formulario completo de prueba está desactivado.',
+      })
     }
 
     const apiKey = process.env.RESEND_API_KEY?.trim()
@@ -107,11 +145,14 @@ export default {
           to: [toEmail],
           reply_to: (data.email as string).trim(),
           subject: `Reathlet - Nueva solicitud - ${data.tipoPaciente}`,
-          text: [
+          text: fullRequest ? fullRequestText(fullRequest.data) : [
             `Tipo de paciente: ${data.tipoPaciente}`,
             `Nombre: ${(data.nombre as string).trim()}`,
             `Correo electrónico: ${(data.email as string).trim()}`,
           ].join('\n'),
+          ...(fullRequest?.attachment && { attachments: [{
+            filename: 'firma-paciente.png', content: fullRequest.attachment,
+          }] }),
         }),
         signal: AbortSignal.timeout(10_000),
         redirect: 'error',

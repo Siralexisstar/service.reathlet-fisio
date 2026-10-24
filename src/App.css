@@ -2834,7 +2834,12 @@ textarea.field-input {
 }
 
 .first-visit-email .message-body p {
-  overflow-wrap:anywhere
+  overflow-wrap:anywhere;
+  white-space:pre-line
+}
+
+.first-visit-email .message-body img {
+  height:auto
 }
 
 .preview-actions {

@@ -7,12 +7,13 @@ import { act, createElement } from 'react'
 import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 
-let dom, server, BookingDialog, createRoot, root, container, i18n, onClose
+let dom, server, BookingDialog, createRoot, root, container, i18n, onClose, signatureDataUrl
 
 before(async () => {
   dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' })
   globalThis.window = dom.window
   globalThis.document = dom.window.document
+  globalThis.Image = dom.window.Image
   Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true })
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   // jsdom has no native dialog or layout implementation.
@@ -22,6 +23,10 @@ before(async () => {
   ;({ createRoot } = await import('react-dom/client'))
   server = await createServer({ server: { middlewareMode: true, watch: null }, appType: 'custom' })
   ;({ BookingDialog } = await server.ssrLoadModule('/src/components/BookingDialog.tsx'))
+  ;({ signatureDataUrl } = await server.ssrLoadModule('/tests/png-fixture.ts'))
+  dom.window.HTMLCanvasElement.prototype.getContext = () => ({ clearRect() {}, drawImage() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {} })
+  dom.window.HTMLCanvasElement.prototype.toDataURL = () => signatureDataUrl()
+  dom.window.HTMLCanvasElement.prototype.setPointerCapture = () => {}
   i18n = createInstance()
   const translation = JSON.parse(await readFile(new URL('../src/i18n/locales/es-ES.json', import.meta.url), 'utf8'))
   await i18n.init({ lng: 'es-ES', resources: { 'es-ES': { translation } }, interpolation: { escapeValue: false } })
@@ -49,6 +54,7 @@ after(async () => {
   dom?.window.close()
   delete globalThis.window
   delete globalThis.document
+  delete globalThis.Image
   delete globalThis.navigator
   delete globalThis.IS_REACT_ACT_ENVIRONMENT
 })
@@ -79,16 +85,31 @@ async function fill(id, value) {
   })
 }
 
-async function preview() {
+async function drawSignature() {
+  const canvas = container.querySelector('canvas')
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 300 })
+  await act(async () => {
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new dom.window.Event(type, { bubbles: true })
+      Object.assign(event, { clientX: 20, clientY: 20, pointerId: 1 })
+      canvas.dispatchEvent(event)
+    }
+  })
+}
+
+async function preview({ optional = true, pain, drawn = false } = {}) {
   await fill('name', ' Paciente ficticio ')
   await fill('email', 'prueba@example.com')
-  await fill('phone', '+34 600 000 000')
+  if (optional) await fill('phone', '+34 600 000 000')
   await click(button('Continuar'))
   await fill('region', 'Valoración general')
   await fill('duration', 'Menos de una semana')
-  await fill('reason', 'Motivo clínico ficticio que no debe enviarse')
-  await fill('history', 'Antecedente ficticio que no debe enviarse')
-  await fill('medication', 'Medicación ficticia que no debe enviarse')
+  await fill('reason', 'Consulta clínica ficticia de prueba')
+  if (optional) {
+    await fill('history', 'Antecedente ficticio')
+    await fill('medication', 'Medicación ficticia')
+  }
+  if (pain !== undefined) await fill('pain', String(pain))
   await click(button('Continuar'))
   assert.equal(container.querySelector('#privacy').checked, false)
   assert.equal(container.querySelector('#healthConsent').checked, false)
@@ -98,12 +119,16 @@ async function preview() {
   assert.ok(container.querySelector('#signature-error'))
   await click(container.querySelector('#privacy'))
   await click(container.querySelector('#healthConsent'))
-  await fill('signature', 'Firma ficticia que no debe enviarse')
+  await fill('signature', 'Firma ficticia')
+  if (drawn) {
+    await click(button('Dibujar firma'))
+    await drawSignature()
+  }
   await click(button('Firmar y continuar'))
   await click(button('Ver mi solicitud'))
 }
 
-test('requires contact validation and consent before an explicit send, sends only contact fields and blocks duplicate clicks', async () => {
+test('requires validation and consent before an explicit v2 send, previews all sections and blocks duplicate clicks', async () => {
   let accept
   const resend = mock.method(globalThis, 'fetch', () => new Promise(resolve => { accept = resolve }))
   await mount()
@@ -113,7 +138,8 @@ test('requires contact validation and consent before an explicit send, sends onl
   await preview()
   assert.equal(resend.mock.callCount(), 0)
   assert.equal(container.querySelector('a[href^="mailto:"]'), null)
-  assert.match(container.textContent, /buzón de pruebas/)
+  assert.match(container.textContent, /Si el envío está habilitado/)
+  assert.doesNotMatch(container.textContent, /bloqueado en producción|solo para pruebas|exclusivamente una demostración/i)
   const send = button('Enviar solicitud')
   await act(async () => { send.click(); send.click() })
   assert.equal(resend.mock.callCount(), 1)
@@ -129,8 +155,12 @@ test('requires contact validation and consent before an explicit send, sends onl
   assert.deepEqual(options.headers, { 'Content-Type': 'application/json', 'Idempotency-Key': options.headers['Idempotency-Key'] })
   assert.match(options.headers['Idempotency-Key'], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   assert.deepEqual(JSON.parse(options.body), {
-    tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com', website: '',
+    version: 2, tipoPaciente: 'NUEVO', nombre: 'Paciente ficticio', email: 'prueba@example.com', website: '',
+    administrativo: { telefono: '+34 600 000 000', preferenciaHoraria: 'Sin preferencia', canal: 'EMAIL' },
+    clinico: { zona: 'Valoración general', duracion: 'Menos de una semana', motivo: 'Consulta clínica ficticia de prueba', dolorActual: null, antecedentes: 'Antecedente ficticio', medicacionAlergias: 'Medicación ficticia' },
+    consentimientos: { privacidad: true, salud: true }, firma: { tipo: 'ESCRITA', texto: 'Firma ficticia' },
   })
+  for (const text of ['Consulta clínica ficticia', 'Antecedente ficticio', 'Medicación ficticia', 'Firma ficticia', 'Privacidad y consentimientos']) assert.ok(container.textContent.includes(text))
   await act(async () => accept(Response.json({ validated: true, sent: true })))
   assert.match(container.querySelector('[role="status"]').textContent, /aceptado.*pendiente de confirmación/)
   assert.equal(button('Solicitud enviada').disabled, true)
@@ -232,26 +262,132 @@ test('frontend source does not reference private server configuration or the pro
       const file = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory)
       if (entry.isDirectory()) await checkSources(file)
       else if (/\.(ts|tsx)$/.test(entry.name)) {
-        assert.doesNotMatch(await readFile(file, 'utf8'), /RESEND_(API_KEY|FROM_EMAIL|TO_EMAIL)|api\.resend\.com/)
+        assert.doesNotMatch(await readFile(file, 'utf8'), /RESEND_(API_KEY|FROM_EMAIL|TO_EMAIL|FULL_FORM_ENABLED)|api\.resend\.com/)
       }
     }
   }
   await checkSources(new URL('../src/', import.meta.url))
 })
 
-test('choosing a new first visit in the same dialog starts a new identifier without contact edits', async () => {
+test('starting a new first visit clears the form, signatures and consents and starts another identifier', async () => {
   const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
   await mount()
   await preview()
   await click(button('Enviar solicitud'))
   for (let step = 0; step < 5; step++) await click(button('Atrás'))
   await click(button('Es mi primera visitaUn formulario breve para conocerte mejor.Datos, motivo de consulta y consentimiento.'))
-  await click(button('Continuar'))
-  await click(button('Continuar'))
-  await click(button('Firmar y continuar'))
-  await click(button('Ver mi solicitud'))
+  assert.equal(container.querySelector('#name').value, '')
+  assert.equal(container.querySelector('#email').value, '')
+  await preview()
   await click(button('Enviar solicitud'))
   assert.equal(request.mock.callCount(), 2)
+  assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+  assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+})
+
+test('disabled full-form sending has a clear error, preserves the form and does not display success', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ validated: true, sent: false, code: 'FULL_FORM_DISABLED' }, { status: 503 }))
+  await mount()
+  await preview()
+  await click(button('Enviar solicitud'))
+  assert.match(container.querySelector('[role="alert"]').textContent, /desactivado.*No se ha enviado ningún correo/)
+  assert.equal(button('Reintentar envío').disabled, false)
+  await click(button('Reintentar envío'))
+  assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+  assert.equal(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+})
+
+test('optional blanks stay blank; unanswered pain is null, while zero is an explicit answer', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview({ optional: false, pain: 0 })
+  await click(button('Enviar solicitud'))
+  const payload = JSON.parse(request.mock.calls[0].arguments[1].body)
+  assert.equal(payload.administrativo.telefono, '')
+  assert.equal(payload.clinico.antecedentes, '')
+  assert.equal(payload.clinico.medicacionAlergias, '')
+  assert.equal(payload.clinico.dolorActual, 0)
+})
+
+test('drawn signature sends only PNG; switching back to written sends only the written alternative with a new key', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview({ drawn: true })
+  await click(button('Enviar solicitud'))
+  assert.deepEqual(JSON.parse(request.mock.calls[0].arguments[1].body).firma, { tipo: 'DIBUJADA', png: signatureDataUrl() })
+  await click(button('Atrás'))
+  await click(button('Atrás'))
+  await click(button('Escribir firma'))
+  await click(button('Firmar y continuar'))
+  await click(button('Ver mi solicitud'))
+  await click(button('Reintentar envío'))
+  assert.deepEqual(JSON.parse(request.mock.calls[1].arguments[1].body).firma, { tipo: 'ESCRITA', texto: 'Firma ficticia' })
+  assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+})
+
+for (const [field, value, step] of [
+  ['name', 'Otro paciente ficticio', 'data'], ['email', 'otro@example.com', 'data'],
+  ['phone', '+34 600 000 001', 'data'], ['availability', 'Por la tarde', 'data'],
+  ['region', 'Rodilla', 'reason'], ['duration', 'Más de 3 meses', 'reason'],
+  ['reason', 'Otro motivo ficticio de prueba', 'reason'], ['pain', '7', 'reason'],
+  ['history', 'Otro antecedente ficticio', 'reason'], ['medication', 'Otra medicación ficticia', 'reason'],
+  ['signature', 'Otra firma ficticia', 'consent'], ['privacy', null, 'consent'], ['healthConsent', null, 'consent'],
+]) {
+  test(`editing ${field} invalidates the request identifier`, async () => {
+    const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+    await mount()
+    await preview()
+    await click(button('Enviar solicitud'))
+    await click(button('Atrás'))
+    await click(button('Revisar'))
+    if (step !== 'data') await click(button('Continuar'))
+    if (step === 'consent') await click(button('Continuar'))
+    if (value === null) {
+      await click(container.querySelector(`#${field}`))
+      await click(container.querySelector(`#${field}`))
+    } else await fill(field, value)
+    if (step === 'data') await click(button('Continuar'))
+    if (step !== 'consent') await click(button('Continuar'))
+    await click(button('Firmar y continuar'))
+    await click(button('Ver mi solicitud'))
+    await click(button('Reintentar envío'))
+    assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+  })
+}
+
+test('clearing and redrawing a signature invalidates the identifier even when the drawing is restored', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview({ drawn: true })
+  await click(button('Enviar solicitud'))
+  await click(button('Atrás'))
+  await click(button('Atrás'))
+  await click(button('Borrar firma'))
+  await click(button('Firmar y continuar'))
+  assert.ok(container.querySelector('#signature-error'))
+  await drawSignature()
+  await click(button('Firmar y continuar'))
+  await click(button('Ver mi solicitud'))
+  await click(button('Reintentar envío'))
+  assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+  assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+})
+
+test('changing channel away and back renews the key without sending clinical information to WhatsApp', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount()
+  await preview()
+  await click(button('Enviar solicitud'))
+  await click(button('Atrás'))
+  await click(button('WhatsAppUna conversación más cercana'))
+  await click(button('Ver mi solicitud'))
+  const link = container.querySelector('a[href^="https://wa.me/"]')
+  assert.doesNotMatch(decodeURIComponent(link.href), /Consulta clínica|Antecedente|Medicación|Firma ficticia/)
+  assert.equal(request.mock.callCount(), 1)
+  await click(button('Atrás'))
+  await click(button('Correo electrónicoConsulta cuando te venga bien'))
+  await click(button('Ver mi solicitud'))
+  await click(button('Reintentar envío'))
   assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
   assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
 })
