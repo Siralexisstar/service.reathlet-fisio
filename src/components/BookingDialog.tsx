@@ -4,12 +4,15 @@ import { contact } from '../data'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { useTranslation } from 'react-i18next'
+import { availabilityOptions, durationOptions, regionOptions } from '../lib/firstVisit'
+import type { FullRequest } from '../lib/firstVisit'
 
 type Channel = 'whatsapp' | 'email'
 export type BookingIntent = { patient?: 'new' | 'returning'; channel?: Channel }
 type Step = 'choose' | 'data' | 'reason' | 'consent' | 'channel' | 'preview'
 type Intake = { name: string; email: string; phone: string; availability: string; region: string; duration: string; reason: string; pain: string; history: string; medication: string; signature: string; privacy: boolean; healthConsent: boolean }
 type Errors = Partial<Record<keyof Intake, string>>
+const emptyIntake = (): Intake => ({ name: '', email: '', phone: '', availability: 'Sin preferencia', region: '', duration: '', reason: '', pain: '', history: '', medication: '', signature: '', privacy: false, healthConsent: false })
 
 const headings: Record<Step, [string, string]> = {
   choose: ['booking.chooseTitle', 'booking.chooseText'],
@@ -25,6 +28,7 @@ function Field({ id, label, children, error, required = false, optional = false 
 }
 
 function SignatureDrawing({ value, onChange }: { value: string; onChange: (signature: string) => void }) {
+  const { t } = useTranslation()
   const canvas = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const lastPoint = useRef<[number, number] | null>(null)
@@ -65,26 +69,50 @@ function SignatureDrawing({ value, onChange }: { value: string; onChange: (signa
 
   function clear() { canvas.current?.getContext('2d')?.clearRect(0, 0, 960, 300); onChange('') }
 
-  return <div className="signature-canvas"><canvas ref={canvas} width={960} height={300} aria-label="Área para dibujar tu firma de demostración. También puedes utilizar Escribir firma." onPointerDown={e => draw(e, true)} onPointerMove={e => draw(e)} onPointerUp={finish} onPointerCancel={finish} /><button type="button" className="signature-clear" onClick={clear}>Borrar firma</button></div>
+  return <div className="signature-canvas"><canvas ref={canvas} width={960} height={300} aria-label={t('bookingEmail.signatureCanvas')} onPointerDown={e => draw(e, true)} onPointerMove={e => draw(e)} onPointerUp={finish} onPointerCancel={finish} /><button type="button" className="signature-clear" onClick={clear}>Borrar firma</button></div>
+}
+
+function RequestPreview({ data }: { data: FullRequest }) {
+  const { t } = useTranslation()
+  const optional = (value: string) => value.trim() || t('bookingEmail.notIndicated')
+  const sections: [string, [string, string][]][] = [
+    ['personal', [['patientType', data.tipoPaciente], ['name', data.nombre], ['email', data.email], ['phone', optional(data.administrativo.telefono)]]],
+    ['request', [['availability', data.administrativo.preferenciaHoraria], ['channel', data.administrativo.canal]]],
+    ['consultation', [['region', data.clinico.zona], ['duration', data.clinico.duracion], ['reason', data.clinico.motivo], ['pain', data.clinico.dolorActual === null ? t('bookingEmail.notIndicated') : `${data.clinico.dolorActual}/10`]]],
+    ['health', [['history', optional(data.clinico.antecedentes)], ['medication', optional(data.clinico.medicacionAlergias)]]],
+    ['consents', [['privacy', t('bookingEmail.yes')], ['healthConsent', t('bookingEmail.yes')], ['signatureKind', t(`bookingEmail.${data.firma.tipo === 'ESCRITA' ? 'written' : 'drawn'}`)]]],
+    ['signature', [['signatureValue', data.firma.tipo === 'ESCRITA' ? data.firma.texto : t('bookingEmail.pngAttachment')]]],
+  ]
+  return <>{sections.map(([title, fields]) => <p key={title}><strong>{t(`bookingEmail.${title}`)}</strong><br />{fields.map(([label, value]) => <span key={label}>{t(`bookingEmail.${label}`)}: {value}<br /></span>)}</p>)}{data.firma.tipo === 'DIBUJADA' && <img src={data.firma.png} width={240} height={75} alt={t('bookingEmail.drawn')} />}</>
 }
 
 export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onClose: () => void }) {
   const { t } = useTranslation()
+  const [patient, setPatient] = useState(intent.patient)
   const [step, setStep] = useState<Step>(intent.patient === 'new' ? 'data' : intent.patient === 'returning' ? 'channel' : 'choose')
-  const [values, setValues] = useState<Intake>({ name: '', email: '', phone: '', availability: 'Sin preferencia', region: '', duration: '', reason: '', pain: '3', history: '', medication: '', signature: '', privacy: false, healthConsent: false })
+  const [values, setValues] = useState<Intake>(emptyIntake)
   const [errors, setErrors] = useState<Errors>({})
   const [signatureKind, setSignatureKind] = useState<'write' | 'draw'>('write')
   const [drawnSignature, setDrawnSignature] = useState('')
   const [completed, setCompleted] = useState(false)
   const [channel, setChannel] = useState<Channel | undefined>(intent.channel)
   const [copyStatus, setCopyStatus] = useState('')
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [fullFormDisabled, setFullFormDisabled] = useState(false)
+  const [website, setWebsite] = useState('')
+  const emailLocked = useRef(false)
+  const emailRequestId = useRef<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const formStep = ['data', 'reason', 'consent'].indexOf(step) + 1
+  const firstVisit = patient === 'new'
+  const firstVisitEmail = firstVisit && completed && channel === 'email'
+  const sending = emailStatus === 'sending'
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); content.current?.scrollTo(0, 0) }, [step])
 
   function update<K extends keyof Intake>(key: K, value: Intake[K]) {
+    if (values[key] !== value) emailRequestId.current = null
     setValues(previous => ({ ...previous, [key]: value }))
     setErrors(previous => ({ ...previous, [key]: undefined }))
   }
@@ -107,7 +135,7 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
     if (step === 'consent') {
       if (!values.privacy) nextErrors.privacy = 'Lee y acepta la información sobre privacidad.'
       if (!values.healthConsent) nextErrors.healthConsent = 'El consentimiento explícito es necesario para continuar.'
-      if (signatureKind === 'write' ? values.signature.trim().length < 3 : !drawnSignature) nextErrors.signature = 'Escribe tu nombre completo o dibuja tu firma de prueba.'
+      if (signatureKind === 'write' ? values.signature.trim().length < 3 : !drawnSignature) nextErrors.signature = t('bookingEmail.signatureError')
     }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
@@ -121,65 +149,112 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   }
 
   function back() {
-    const previous: Record<Step, Step> = { choose: 'choose', data: 'choose', reason: 'data', consent: 'reason', channel: completed ? 'consent' : 'choose', preview: 'channel' }
+    const previous: Record<Step, Step> = { choose: 'choose', data: 'choose', reason: 'data', consent: 'reason', channel: firstVisit && completed ? 'consent' : 'choose', preview: 'channel' }
     changeStep(previous[step])
+  }
+
+  function fullRequest(): FullRequest {
+    return {
+      version: 2, tipoPaciente: 'NUEVO', nombre: values.name.trim(), email: values.email.trim(), website,
+      administrativo: { telefono: values.phone.trim(), preferenciaHoraria: values.availability, canal: 'EMAIL' },
+      clinico: {
+        zona: values.region, duracion: values.duration, motivo: values.reason.trim(),
+        dolorActual: values.pain === '' ? null : Number(values.pain),
+        antecedentes: values.history.trim(), medicacionAlergias: values.medication.trim(),
+      },
+      consentimientos: { privacidad: values.privacy, salud: values.healthConsent },
+      firma: signatureKind === 'write' ? { tipo: 'ESCRITA', texto: values.signature.trim() } : { tipo: 'DIBUJADA', png: drawnSignature },
+    }
+  }
+
+  async function sendEmail() {
+    if (!firstVisitEmail || step !== 'preview' || emailLocked.current) return
+    emailLocked.current = true
+    setEmailStatus('sending')
+    setFullFormDisabled(false)
+    try {
+      emailRequestId.current ??= crypto.randomUUID()
+      const response = await fetch('/api/enviar-solicitud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': emailRequestId.current },
+        // Explicit v2 allowlist, including only the selected signature alternative.
+        body: JSON.stringify(fullRequest()),
+        signal: AbortSignal.timeout(20_000),
+      })
+      const result: unknown = await response.json()
+      if (response.status === 503 && typeof result === 'object' && result !== null
+        && 'code' in result && result.code === 'FULL_FORM_DISABLED') setFullFormDisabled(true)
+      if (!response.ok || typeof result !== 'object' || result === null
+        || !('sent' in result) || result.sent !== true) throw new Error('Unconfirmed send')
+      setEmailStatus('sent')
+    } catch {
+      emailLocked.current = false
+      setEmailStatus('error')
+    }
   }
 
   const input = (key: 'name' | 'email' | 'phone' | 'medication' | 'signature', options: { type?: string; placeholder?: string; autoComplete?: string; maxLength?: number } = {}) => <input id={key} className={`field-input ${key === 'signature' ? 'signature-input' : ''}`} value={values[key]} onChange={e => update(key, e.target.value)} aria-invalid={Boolean(errors[key])} aria-describedby={errors[key] ? `${key}-error` : undefined} required={['name', 'email', 'signature'].includes(key)} maxLength={options.maxLength ?? 160} {...options} />
   const select = (key: 'availability' | 'region' | 'duration', options: string[]) => <select id={key} className="field-input field-select" value={values[key]} onChange={e => update(key, e.target.value)} required={key !== 'availability'} aria-invalid={Boolean(errors[key])} aria-describedby={errors[key] ? `${key}-error` : undefined}>{key !== 'availability' && <option value="">Elige una opción</option>}{options.map(option => <option key={option}>{option}</option>)}</select>
   const textArea = (key: 'reason' | 'history', placeholder: string) => <textarea id={key} className="field-input" rows={3} value={values[key]} onChange={e => update(key, e.target.value)} placeholder={placeholder} maxLength={1000} required={key === 'reason'} aria-invalid={Boolean(errors[key])} aria-describedby={errors[key] ? `${key}-error` : undefined} />
-  const message = `Hola, Reathlet. ${completed ? `Soy ${values.name.trim()} y me gustaría solicitar una primera visita.` : 'Ya soy paciente y me gustaría solicitar una nueva cita.'}${completed && values.availability !== 'Sin preferencia' ? ` Mi preferencia horaria es: ${values.availability.toLowerCase()}.` : ''} ¿Podemos hablar de la disponibilidad? Gracias.`
+  const message = `Hola, Reathlet. ${firstVisit && completed ? `Soy ${values.name.trim()} y me gustaría solicitar una primera visita.` : 'Ya soy paciente y me gustaría solicitar una nueva cita.'}${firstVisit && completed && values.availability !== 'Sin preferencia' ? ` Mi preferencia horaria es: ${values.availability.toLowerCase()}.` : ''} ¿Podemos hablar de la disponibilidad? Gracias.`
 
   async function copyMessage() {
     try { await navigator.clipboard.writeText(message); setCopyStatus('Mensaje copiado.') }
     catch { setCopyStatus('No se pudo copiar automáticamente. Puedes seleccionar y copiar el mensaje.') }
   }
 
-  return <Modal onClose={onClose} className="booking-dialog" label="booking-title" closeLabel={t('common.closeForm')}>
-    <div className="booking-heading"><span className="eyebrow">{t('booking.eyebrow')}</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{t(headings[step][0])}</h2><p data-slot="dialog-description">{t(headings[step][1])}</p></div>
+  return <Modal onClose={onClose} closeDisabled={sending} className="booking-dialog" label="booking-title" closeLabel={t('common.closeForm')}>
+    <div className="booking-heading"><span className="eyebrow">{t('booking.eyebrow')}</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{t(headings[step][0])}</h2><p data-slot="dialog-description">{t(firstVisitEmail && step === 'preview' ? 'bookingEmail.previewText' : headings[step][1])}</p></div>
     {formStep > 0 && <div className="form-progress"><div><span>Paso {formStep} de 3</span><span>{['Tus datos', 'Tu consulta', 'Consentimiento'][formStep - 1]}</span></div><div className="intake-progress" role="progressbar" aria-label={`Paso ${formStep} de 3`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(formStep / 3 * 100)}><div data-slot="progress-indicator" style={{ width: `${formStep / 3 * 100}%`, height: '100%' }} /></div></div>}
     <div ref={content} className="booking-content">
-      <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>Prueba con datos ficticios.</strong> Esta demo no guarda datos de salud ni firmas y no crea citas reales.</p></div>
-      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => changeStep('data')}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>Es mi primera visita</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => changeStep('channel')}><span className="choice-icon"><Icon name="chat" /></span><span><strong>Ya soy paciente</strong><small>Contacta para pedir una nueva cita.</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
+      <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>{t(patient === 'returning' ? 'booking.demoStrong' : 'bookingEmail.title')}</strong> {patient === 'returning' ? 'Esta demo no guarda datos de salud ni firmas y no crea citas reales.' : t('bookingEmail.notice')}</p></div>
+      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => { setPatient('new'); setValues(emptyIntake()); setSignatureKind('write'); setDrawnSignature(''); setWebsite(''); setCompleted(false); setEmailStatus('idle'); setFullFormDisabled(false); emailRequestId.current = null; changeStep('data') }}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>Es mi primera visita</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => { setPatient('returning'); changeStep('channel') }}><span className="choice-icon"><Icon name="chat" /></span><span><strong>Ya soy paciente</strong><small>Contacta para pedir una nueva cita.</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
       {formStep > 0 && <form id="intake-form" onSubmit={submit} noValidate>
+        <div hidden aria-hidden="true"><input type="text" id="booking-website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => { setWebsite(event.target.value); emailRequestId.current = null }} /></div>
         {Object.values(errors).some(Boolean) && <div className="error-summary" role="alert">Revisa los campos marcados antes de continuar.</div>}
         {step === 'data' && <>
           <h3 className="sr-only">Tus datos de contacto</h3>
           <Field id="name" label="Nombre y apellidos" required error={errors.name}>{input('name', { placeholder: 'Por ejemplo, Alex García', autoComplete: 'name', maxLength: 100 })}</Field>
           <div className="field-grid"><Field id="email" label="Correo electrónico" required error={errors.email}>{input('email', { type: 'email', placeholder: 'tu@email.com', autoComplete: 'email' })}</Field><Field id="phone" label="Teléfono" optional error={errors.phone}>{input('phone', { type: 'tel', placeholder: '+34', autoComplete: 'tel', maxLength: 20 })}</Field></div>
-          <Field id="availability" label="¿Cuándo te suele venir bien?">{select('availability', ['Sin preferencia', 'Por la mañana', 'Al mediodía', 'Por la tarde'])}</Field>
+          <Field id="availability" label="¿Cuándo te suele venir bien?">{select('availability', availabilityOptions)}</Field>
           <p className="field-hint">Campos con * obligatorios. La disponibilidad es una preferencia, no una reserva.</p>
           <p className="privacy-brief">Responsable: Reathlet (titular pendiente de validar). Finalidad prevista: gestionar tu solicitud y preparar la valoración. Puedes consultar tus derechos en la <a href="/legal/privacidad" target="_blank" rel="noopener noreferrer">política de privacidad</a>.</p>
         </>}
         {step === 'reason' && <>
           <h3 className="sr-only">Motivo de consulta</h3>
-          <div className="field-grid"><Field id="region" label="¿Qué zona te preocupa?" required error={errors.region}>{select('region', ['Cuello / cervicales', 'Hombro / brazo', 'Espalda / zona lumbar', 'Cadera', 'Rodilla', 'Tobillo / pie', 'Varias zonas', 'Valoración general'])}</Field><Field id="duration" label="¿Desde cuándo?" required error={errors.duration}>{select('duration', ['Menos de una semana', 'Entre 1 y 4 semanas', 'Entre 1 y 3 meses', 'Más de 3 meses', 'No tengo molestias actualmente'])}</Field></div>
+          <div className="field-grid"><Field id="region" label="¿Qué zona te preocupa?" required error={errors.region}>{select('region', regionOptions)}</Field><Field id="duration" label="¿Desde cuándo?" required error={errors.duration}>{select('duration', durationOptions)}</Field></div>
           <Field id="reason" label="¿Qué te ocurre y qué te gustaría recuperar?" required error={errors.reason}>{textArea('reason', 'Cuéntanos brevemente el motivo de tu consulta.')}</Field>
-          <div className="pain-field"><div><label htmlFor="pain" className="field-label">Molestia actual <span className="optional">(orientativa)</span></label><strong>{values.pain}<small>/10</small></strong></div><input id="pain" type="range" min="0" max="10" step="1" value={values.pain} onChange={e => update('pain', e.target.value)} /><div className="range-labels"><span>Sin molestias</span><span>Muy intensa</span></div></div>
+          <div className="pain-field"><div><label htmlFor="pain" className="field-label">Molestia actual <span className="optional">(orientativa)</span></label><strong>{values.pain === '' ? <small>{t('bookingEmail.notIndicated')}</small> : <>{values.pain}<small>/10</small></>}</strong></div><input id="pain" type="range" min="0" max="10" step="1" value={values.pain || '3'} onChange={e => update('pain', e.target.value)} onPointerDown={e => update('pain', e.currentTarget.value)} onKeyDown={e => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) update('pain', e.currentTarget.value) }} aria-valuetext={values.pain === '' ? t('bookingEmail.notIndicated') : `${values.pain}/10`} aria-describedby="pain-hint" /><div className="range-labels"><span>Sin molestias</span><span>Muy intensa</span></div><p id="pain-hint" className="field-hint">{t('bookingEmail.painHint')}</p><button type="button" className="text-button" onClick={() => update('pain', '')}>{t('bookingEmail.clearPain')}</button></div>
           <Field id="history" label="Lesiones, cirugías o antecedentes" optional>{textArea('history', 'Solo lo que consideres relevante.')}</Field>
           <Field id="medication" label="Medicación o alergias relevantes" optional>{input('medication', { placeholder: 'Si quieres, indícalo aquí.', maxLength: 300 })}</Field>
           <p className="field-hint">Este formulario no realiza diagnósticos ni sustituye una valoración profesional.</p>
         </>}
         {step === 'consent' && <>
           <h3 className="sr-only">Consentimiento y firma</h3>
-          <div className="consent-info"><Icon name="shield" size={22} /><div><strong>Tú decides sobre tus datos.</strong><p>El uso previsto del formulario es preparar tu primera consulta. La versión real deberá conservar de forma segura la información y la evidencia del consentimiento. Aquí todo permanece solo en memoria y se borra al cerrar.</p></div></div>
+          <div className="consent-info"><Icon name="shield" size={22} /><div><strong>Tú decides sobre tus datos.</strong><p>{t('bookingEmail.consentInfo')}</p></div></div>
           <div className="consent-choice"><input id="privacy" type="checkbox" checked={values.privacy} onChange={e => update('privacy', e.target.checked)} aria-invalid={Boolean(errors.privacy)} aria-describedby={errors.privacy ? 'privacy-error' : undefined} /><div><label htmlFor="privacy">He leído la información sobre privacidad. *</label><a href="/legal/privacidad" target="_blank" rel="noopener noreferrer">Consultar la política de privacidad</a>{errors.privacy && <span id="privacy-error" className="field-error">{errors.privacy}</span>}</div></div>
           <div className="consent-choice"><input id="healthConsent" type="checkbox" checked={values.healthConsent} onChange={e => update('healthConsent', e.target.checked)} aria-invalid={Boolean(errors.healthConsent)} aria-describedby={errors.healthConsent ? 'healthConsent-error' : undefined} /><div><label htmlFor="healthConsent">Consiento de forma explícita el tratamiento de la información de salud que aporto para preparar mi primera valoración y gestionar esta solicitud. *</label>{errors.healthConsent && <span id="healthConsent-error" className="field-error">{errors.healthConsent}</span>}</div></div>
-          <div className="signature-field"><span id="signature-label" tabIndex={-1} className="field-label">Tu firma <span aria-hidden="true">*</span></span><div className="signature-tabs" role="tablist" aria-label="Forma de firmar"><button id="signature-write-tab" type="button" role="tab" aria-controls="signature-panel" aria-selected={signatureKind === 'write'} onClick={() => setSignatureKind('write')}>Escribir firma</button><button id="signature-draw-tab" type="button" role="tab" aria-controls="signature-panel" aria-selected={signatureKind === 'draw'} onClick={() => setSignatureKind('draw')}>Dibujar firma</button></div><div id="signature-panel" role="tabpanel" aria-labelledby={`signature-${signatureKind}-tab`}>{signatureKind === 'write' ? <Field id="signature" label="Nombre completo como firma">{input('signature', { placeholder: 'Tu nombre completo', autoComplete: 'off', maxLength: 100 })}</Field> : <SignatureDrawing value={drawnSignature} onChange={signature => { setDrawnSignature(signature); setErrors(previous => ({ ...previous, signature: undefined })) }} />}</div>{errors.signature && <span id="signature-error" className="field-error">{errors.signature}</span>}<p className="field-hint">Firma de demostración. No genera un consentimiento legal registrado.</p></div>
+          <div className="signature-field"><span id="signature-label" tabIndex={-1} className="field-label">Tu firma <span aria-hidden="true">*</span></span><div className="signature-tabs" role="tablist" aria-label="Forma de firmar"><button id="signature-write-tab" type="button" role="tab" aria-controls="signature-panel" aria-selected={signatureKind === 'write'} onClick={() => { if (signatureKind !== 'write') emailRequestId.current = null; setSignatureKind('write') }}>Escribir firma</button><button id="signature-draw-tab" type="button" role="tab" aria-controls="signature-panel" aria-selected={signatureKind === 'draw'} onClick={() => { if (signatureKind !== 'draw') emailRequestId.current = null; setSignatureKind('draw') }}>Dibujar firma</button></div><div id="signature-panel" role="tabpanel" aria-labelledby={`signature-${signatureKind}-tab`}>{signatureKind === 'write' ? <Field id="signature" label="Nombre completo como firma">{input('signature', { placeholder: 'Tu nombre completo', autoComplete: 'off', maxLength: 100 })}</Field> : <SignatureDrawing value={drawnSignature} onChange={signature => { if (drawnSignature !== signature) emailRequestId.current = null; setDrawnSignature(signature); setErrors(previous => ({ ...previous, signature: undefined })) }} />}</div>{errors.signature && <span id="signature-error" className="field-error">{errors.signature}</span>}<p className="field-hint">{t('bookingEmail.signatureNotice')}</p></div>
           <p className="privacy-brief">Este consentimiento sobre datos no autoriza técnicas invasivas. Cualquier consentimiento asistencial específico se explica y recoge por separado.</p>
         </>}
       </form>}
       {step === 'channel' && <>
-        {completed && <div className="intake-ready"><Icon name="check" size={20} /><span>Formulario de prueba completado.</span><button className="text-button" onClick={() => changeStep('data')}>Revisar</button></div>}
-        <h3 className="sr-only">Elegir canal de contacto</h3><div className="channel-options" role="group" aria-label="Canal de contacto">{(['whatsapp', 'email'] as const).map(option => <button key={option} className={`channel-card ${channel === option ? 'selected' : ''}`} aria-pressed={channel === option} onClick={() => setChannel(option)}><Icon name={option === 'whatsapp' ? 'chat' : 'mail'} size={30} /><strong>{option === 'whatsapp' ? 'WhatsApp' : 'Correo electrónico'}</strong><span>{option === 'whatsapp' ? 'Una conversación más cercana' : 'Consulta cuando te venga bien'}</span>{channel === option && <span className="channel-check"><Icon name="check" size={18} /></span>}</button>)}</div>
-        <div className="channel-privacy"><Icon name="shield" size={16} /><p>El mensaje solo incluye una solicitud de cita. Los antecedentes, las molestias y la firma no se añaden a WhatsApp ni al correo.</p></div><p className="field-hint">WhatsApp: +34 611 53 79 27.<br />Correo: {contact.email}</p>
+        {firstVisit && completed && <div className="intake-ready"><Icon name="check" size={20} /><span>{t('bookingEmail.ready')}</span><button className="text-button" onClick={() => changeStep('data')}>Revisar</button></div>}
+        <h3 className="sr-only">Elegir canal de contacto</h3><div className="channel-options" role="group" aria-label="Canal de contacto">{(['whatsapp', 'email'] as const).map(option => <button key={option} className={`channel-card ${channel === option ? 'selected' : ''}`} aria-pressed={channel === option} onClick={() => { if (channel !== option) emailRequestId.current = null; setChannel(option) }}><Icon name={option === 'whatsapp' ? 'chat' : 'mail'} size={30} /><strong>{option === 'whatsapp' ? 'WhatsApp' : 'Correo electrónico'}</strong><span>{option === 'whatsapp' ? 'Una conversación más cercana' : 'Consulta cuando te venga bien'}</span>{channel === option && <span className="channel-check"><Icon name="check" size={18} /></span>}</button>)}</div>
+        <div className="channel-privacy"><Icon name="shield" size={16} /><p>{firstVisit ? t('bookingEmail.channelPrivacy') : 'El mensaje solo incluye una solicitud de cita. Los antecedentes, las molestias y la firma no se añaden a WhatsApp ni al correo.'}</p></div><p className="field-hint">WhatsApp: +34 611 53 79 27.<br />{firstVisit ? t('bookingEmail.channelHint') : <>Correo: {contact.email}</>}</p>
       </>}
       {step === 'preview' && <>
+        {firstVisitEmail ? <>
+          <div className="message-preview first-visit-email"><div className="message-preview-header"><Icon name="mail" size={23} /><div><strong>{t('bookingEmail.title')}</strong><span>{t('bookingEmail.recipient')}</span></div><span className="demo-badge">{t('bookingEmail.testBadge')}</span></div><div className="message-body"><RequestPreview data={fullRequest()} /><span>{t('bookingEmail.fullContents')}</span></div></div>
+          <div className="preview-actions" aria-busy={sending}><button type="button" className="button button-primary" disabled={sending || emailStatus === 'sent'} onClick={sendEmail}><Icon name="mail" size={18} />{t(`bookingEmail.${emailStatus === 'sending' ? 'sending' : emailStatus === 'sent' ? 'sentButton' : emailStatus === 'error' ? 'retry' : 'send'}`)}</button>{!sending && <a className="button button-outline" href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" size={18} />{t('bookingEmail.whatsapp')}</a>}</div>
+          <p className={emailStatus === 'error' ? 'error-summary' : 'field-hint'} role={emailStatus === 'error' ? 'alert' : 'status'}>{emailStatus === 'sending' ? t('bookingEmail.sending') : emailStatus === 'sent' ? t('bookingEmail.success') : emailStatus === 'error' ? t(`bookingEmail.${fullFormDisabled ? 'disabled' : 'error'}`) : ''}</p>
+        </> : <>
         <div className={`message-preview ${channel === 'whatsapp' ? 'whatsapp-preview' : ''}`}><div className="message-preview-header"><Icon name={channel === 'whatsapp' ? 'chat' : 'mail'} size={23} /><div><strong>{channel === 'whatsapp' ? 'Tu mensaje de WhatsApp' : 'Tu correo para Reathlet'}</strong><span>{channel === 'whatsapp' ? '+34 611 53 79 27' : contact.email}</span></div>{channel === 'email' && <span className="demo-badge">DEMO</span>}</div><div className="message-body"><p>{message}</p><span>{channel === 'whatsapp' ? 'Se abrirá WhatsApp; tendrás que pulsar Enviar.' : 'Vista previa · No se ha enviado ningún mensaje'}</span></div></div>
         <div className="preview-actions"><button className="button button-outline" onClick={copyMessage}><Icon name="copy" size={18} />Copiar mensaje</button>{channel === 'email' ? <a className="button button-primary" href={`mailto:${contact.email}?subject=${encodeURIComponent('Solicitud de cita · Reathlet')}&body=${encodeURIComponent(message)}`}><Icon name="mail" size={18} />Abrir borrador de correo</a> : <a className="button button-primary" href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" size={18} />Abrir WhatsApp</a>}</div><p className="field-hint" role="status">{copyStatus}</p>
+        </>}
         <div className="preview-summary"><Icon name="calendar" size={22} /><div><strong>La clínica confirmará tu cita.</strong><p>La disponibilidad, duración y precio se acuerdan en el primer contacto. En esta versión no se realiza ninguna reserva.</p></div></div>
       </>}
     </div>
-    <div className="booking-footer">{step === 'choose' ? <><span><Icon name="shield" size={15} />Tu información, con cuidado</span><button className="text-button" onClick={onClose}>Seguir explorando</button></> : <><button className="back-button" onClick={back}>Atrás</button>{formStep > 0 ? <button className="button button-primary" type="submit" form="intake-form">{step === 'consent' ? 'Firmar y continuar' : 'Continuar'}</button> : step === 'channel' ? <button className="button button-primary" disabled={!channel} onClick={() => changeStep('preview')}>Ver mi solicitud</button> : <button className="button button-primary" onClick={onClose}>Volver a la web</button>}</>}</div>
+    <div className="booking-footer">{step === 'choose' ? <><span><Icon name="shield" size={15} />Tu información, con cuidado</span><button className="text-button" onClick={onClose}>Seguir explorando</button></> : <><button className="back-button" disabled={sending || (firstVisitEmail && emailStatus === 'sent')} onClick={back}>Atrás</button>{formStep > 0 ? <button className="button button-primary" type="submit" form="intake-form">{step === 'consent' ? 'Firmar y continuar' : 'Continuar'}</button> : step === 'channel' ? <button className="button button-primary" disabled={!channel} onClick={() => changeStep('preview')}>Ver mi solicitud</button> : <button className="button button-primary" disabled={sending} onClick={onClose}>Volver a la web</button>}</>}</div>
   </Modal>
 }
