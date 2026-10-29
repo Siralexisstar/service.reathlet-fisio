@@ -9,10 +9,11 @@ import type { FullRequest } from '../lib/firstVisit'
 
 type Channel = 'whatsapp' | 'email'
 export type BookingIntent = { patient?: 'new' | 'returning'; channel?: Channel }
-type Step = 'choose' | 'data' | 'reason' | 'consent' | 'channel' | 'preview'
+type Step = 'choose' | 'data' | 'reason' | 'consent' | 'channel' | 'returning-data' | 'preview'
 type Intake = { name: string; email: string; phone: string; availability: string; region: string; duration: string; reason: string; pain: string; history: string; medication: string; signature: string; privacy: boolean; healthConsent: boolean }
 type Errors = Partial<Record<keyof Intake, string>>
 const emptyIntake = (): Intake => ({ name: '', email: '', phone: '', availability: 'Sin preferencia', region: '', duration: '', reason: '', pain: '', history: '', medication: '', signature: '', privacy: false, healthConsent: false })
+const emptyContact = () => ({ name: '', email: '', privacy: false })
 
 const headings: Record<Step, [string, string]> = {
   choose: ['booking.chooseTitle', 'booking.chooseText'],
@@ -20,6 +21,7 @@ const headings: Record<Step, [string, string]> = {
   reason: ['booking.reasonTitle', 'booking.reasonText'],
   consent: ['booking.consentTitle', 'booking.consentText'],
   channel: ['booking.channelTitle', 'booking.channelText'],
+  'returning-data': ['bookingContact.detailsTitle', 'bookingContact.detailsText'],
   preview: ['booking.previewTitle', 'booking.previewText'],
 }
 
@@ -91,6 +93,7 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   const [patient, setPatient] = useState(intent.patient)
   const [step, setStep] = useState<Step>(intent.patient === 'new' ? 'data' : intent.patient === 'returning' ? 'channel' : 'choose')
   const [values, setValues] = useState<Intake>(emptyIntake)
+  const [returningContact, setReturningContact] = useState(emptyContact)
   const [errors, setErrors] = useState<Errors>({})
   const [signatureKind, setSignatureKind] = useState<'write' | 'draw'>('write')
   const [drawnSignature, setDrawnSignature] = useState('')
@@ -107,7 +110,14 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   const formStep = ['data', 'reason', 'consent'].indexOf(step) + 1
   const firstVisit = patient === 'new'
   const firstVisitEmail = firstVisit && completed && channel === 'email'
+  const returningEmail = patient === 'returning' && channel === 'email'
+  const emailFlow = firstVisitEmail || returningEmail
   const sending = emailStatus === 'sending'
+  const stepHeading = step === 'preview'
+    ? emailFlow
+      ? [firstVisit ? 'bookingEmail.title' : 'bookingContact.title', firstVisit ? 'bookingEmail.previewText' : 'bookingContact.previewText']
+      : ['bookingContact.whatsappPreviewTitle', 'bookingContact.whatsappPreviewText']
+    : headings[step]
 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); content.current?.scrollTo(0, 0) }, [step])
 
@@ -119,9 +129,35 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
 
   function changeStep(next: Step) { setErrors({}); setCopyStatus(''); setStep(next) }
 
+  function choosePatient(next: 'new' | 'returning') {
+    setPatient(next)
+    setValues(emptyIntake())
+    setReturningContact(emptyContact())
+    setSignatureKind('write')
+    setDrawnSignature('')
+    setWebsite('')
+    setCompleted(false)
+    setEmailStatus('idle')
+    setFullFormDisabled(false)
+    emailLocked.current = false
+    emailRequestId.current = null
+    changeStep(next === 'new' ? 'data' : 'channel')
+  }
+
+  function updateContact<K extends keyof ReturnType<typeof emptyContact>>(key: K, value: ReturnType<typeof emptyContact>[K]) {
+    if (returningContact[key] !== value) emailRequestId.current = null
+    setReturningContact(previous => ({ ...previous, [key]: value }))
+    setErrors(previous => ({ ...previous, [key]: undefined }))
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault()
     const nextErrors: Errors = {}
+    if (step === 'returning-data') {
+      if (returningContact.name.trim().length < 2) nextErrors.name = t('bookingContact.nameError')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(returningContact.email.trim())) nextErrors.email = t('bookingContact.emailError')
+      if (!returningContact.privacy) nextErrors.privacy = t('bookingContact.privacyError')
+    }
     if (step === 'data') {
       if (values.name.trim().length < 2) nextErrors.name = 'Escribe tu nombre y apellidos.'
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) nextErrors.email = 'Introduce un correo electrónico válido.'
@@ -146,10 +182,11 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
     if (step === 'data') changeStep('reason')
     if (step === 'reason') changeStep('consent')
     if (step === 'consent') { setCompleted(true); changeStep('channel') }
+    if (step === 'returning-data') changeStep('preview')
   }
 
   function back() {
-    const previous: Record<Step, Step> = { choose: 'choose', data: 'choose', reason: 'data', consent: 'reason', channel: firstVisit && completed ? 'consent' : 'choose', preview: 'channel' }
+    const previous: Record<Step, Step> = { choose: 'choose', data: 'choose', reason: 'data', consent: 'reason', channel: firstVisit && completed ? 'consent' : 'choose', 'returning-data': 'channel', preview: returningEmail ? 'returning-data' : 'channel' }
     changeStep(previous[step])
   }
 
@@ -168,7 +205,7 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   }
 
   async function sendEmail() {
-    if (!firstVisitEmail || step !== 'preview' || emailLocked.current) return
+    if (!emailFlow || step !== 'preview' || emailLocked.current || (returningEmail && !returningContact.privacy)) return
     emailLocked.current = true
     setEmailStatus('sending')
     setFullFormDisabled(false)
@@ -177,8 +214,10 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
       const response = await fetch('/api/enviar-solicitud', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': emailRequestId.current },
-        // Explicit v2 allowlist, including only the selected signature alternative.
-        body: JSON.stringify(fullRequest()),
+        // Separate allowlists: returning patients never submit clinical state or signatures.
+        body: JSON.stringify(firstVisitEmail ? fullRequest() : {
+          tipoPaciente: 'HABITUAL', nombre: returningContact.name.trim(), email: returningContact.email.trim(), website,
+        }),
         signal: AbortSignal.timeout(20_000),
       })
       const result: unknown = await response.json()
@@ -199,19 +238,25 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
   const message = `Hola, Reathlet. ${firstVisit && completed ? `Soy ${values.name.trim()} y me gustaría solicitar una primera visita.` : 'Ya soy paciente y me gustaría solicitar una nueva cita.'}${firstVisit && completed && values.availability !== 'Sin preferencia' ? ` Mi preferencia horaria es: ${values.availability.toLowerCase()}.` : ''} ¿Podemos hablar de la disponibilidad? Gracias.`
 
   async function copyMessage() {
-    try { await navigator.clipboard.writeText(message); setCopyStatus('Mensaje copiado.') }
-    catch { setCopyStatus('No se pudo copiar automáticamente. Puedes seleccionar y copiar el mensaje.') }
+    try { await navigator.clipboard.writeText(message); setCopyStatus(t('bookingContact.copied')) }
+    catch { setCopyStatus(t('bookingContact.copyError')) }
   }
 
   return <Modal onClose={onClose} closeDisabled={sending} className="booking-dialog" label="booking-title" closeLabel={t('common.closeForm')}>
-    <div className="booking-heading"><span className="eyebrow">{t('booking.eyebrow')}</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{t(headings[step][0])}</h2><p data-slot="dialog-description">{t(firstVisitEmail && step === 'preview' ? 'bookingEmail.previewText' : headings[step][1])}</p></div>
+    <div className="booking-heading"><span className="eyebrow">{t('booking.eyebrow')}</span><h2 ref={heading} id="booking-title" data-slot="dialog-title" tabIndex={-1}>{t(stepHeading[0])}</h2><p data-slot="dialog-description">{t(stepHeading[1])}</p></div>
     {formStep > 0 && <div className="form-progress"><div><span>Paso {formStep} de 3</span><span>{['Tus datos', 'Tu consulta', 'Consentimiento'][formStep - 1]}</span></div><div className="intake-progress" role="progressbar" aria-label={`Paso ${formStep} de 3`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(formStep / 3 * 100)}><div data-slot="progress-indicator" style={{ width: `${formStep / 3 * 100}%`, height: '100%' }} /></div></div>}
     <div ref={content} className="booking-content">
-      <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>{t(patient === 'returning' ? 'booking.demoStrong' : 'bookingEmail.title')}</strong> {patient === 'returning' ? 'Esta demo no guarda datos de salud ni firmas y no crea citas reales.' : t('bookingEmail.notice')}</p></div>
-      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => { setPatient('new'); setValues(emptyIntake()); setSignatureKind('write'); setDrawnSignature(''); setWebsite(''); setCompleted(false); setEmailStatus('idle'); setFullFormDisabled(false); emailRequestId.current = null; changeStep('data') }}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>Es mi primera visita</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => { setPatient('returning'); changeStep('channel') }}><span className="choice-icon"><Icon name="chat" /></span><span><strong>Ya soy paciente</strong><small>Contacta para pedir una nueva cita.</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
-      {formStep > 0 && <form id="intake-form" onSubmit={submit} noValidate>
+      <div className="demo-notice"><Icon name="lock" size={16} /><p><strong>{t(patient === 'returning' ? 'bookingContact.title' : 'bookingEmail.title')}</strong> {t(patient === 'returning' ? channel === 'whatsapp' ? 'bookingContact.whatsappNotice' : 'bookingContact.notice' : channel === 'whatsapp' ? 'bookingContact.firstVisitWhatsappNotice' : 'bookingEmail.notice')}</p></div>
+      {step === 'choose' && <><div className="patient-choices"><button className="patient-choice" onClick={() => choosePatient('new')}><span className="choice-icon"><Icon name="clipboard" /></span><span><strong>{t('booking.firstVisit')}</strong><small>Un formulario breve para conocerte mejor.<br />Datos, motivo de consulta y consentimiento.</small></span><Icon name="right" size={22} /></button><button className="patient-choice" onClick={() => choosePatient('returning')}><span className="choice-icon"><Icon name="chat" /></span><span><strong>{t('booking.returning')}</strong><small>{t('bookingContact.returningDescription')}</small></span><Icon name="right" size={22} /></button></div><p className="booking-reassurance"><Icon name="shield" size={15} />Sin pagos. Sin compromiso. A tu ritmo.</p></>}
+      {(formStep > 0 || step === 'returning-data') && <form id="intake-form" onSubmit={submit} noValidate>
         <div hidden aria-hidden="true"><input type="text" id="booking-website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={event => { setWebsite(event.target.value); emailRequestId.current = null }} /></div>
-        {Object.values(errors).some(Boolean) && <div className="error-summary" role="alert">Revisa los campos marcados antes de continuar.</div>}
+        {Object.values(errors).some(Boolean) && <div className="error-summary" role="alert">{t('booking.formError')}</div>}
+        {step === 'returning-data' && <>
+          <Field id="name" label={t('bookingContact.nameLabel')} required error={errors.name}><input id="name" className="field-input" value={returningContact.name} onChange={e => updateContact('name', e.target.value)} autoComplete="name" maxLength={160} required aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? 'name-error' : undefined} /></Field>
+          <Field id="email" label={t('bookingEmail.email')} required error={errors.email}><input id="email" className="field-input" type="email" value={returningContact.email} onChange={e => updateContact('email', e.target.value)} autoComplete="email" maxLength={254} required aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'email-error' : undefined} /></Field>
+          <p className="privacy-brief">{t('bookingContact.privacyInfo')} <a href="/legal/privacidad" target="_blank" rel="noopener noreferrer">{t('bookingContact.privacyLink')}</a></p>
+          <div className="consent-choice"><input id="privacy" type="checkbox" checked={returningContact.privacy} onChange={e => updateContact('privacy', e.target.checked)} required aria-invalid={Boolean(errors.privacy)} aria-describedby={errors.privacy ? 'privacy-error' : undefined} /><div><label htmlFor="privacy">{t('bookingContact.privacyLabel')} *</label>{errors.privacy && <span id="privacy-error" className="field-error">{errors.privacy}</span>}</div></div>
+        </>}
         {step === 'data' && <>
           <h3 className="sr-only">Tus datos de contacto</h3>
           <Field id="name" label="Nombre y apellidos" required error={errors.name}>{input('name', { placeholder: 'Por ejemplo, Alex García', autoComplete: 'name', maxLength: 100 })}</Field>
@@ -240,21 +285,21 @@ export function BookingDialog({ intent, onClose }: { intent: BookingIntent; onCl
       </form>}
       {step === 'channel' && <>
         {firstVisit && completed && <div className="intake-ready"><Icon name="check" size={20} /><span>{t('bookingEmail.ready')}</span><button className="text-button" onClick={() => changeStep('data')}>Revisar</button></div>}
-        <h3 className="sr-only">Elegir canal de contacto</h3><div className="channel-options" role="group" aria-label="Canal de contacto">{(['whatsapp', 'email'] as const).map(option => <button key={option} className={`channel-card ${channel === option ? 'selected' : ''}`} aria-pressed={channel === option} onClick={() => { if (channel !== option) emailRequestId.current = null; setChannel(option) }}><Icon name={option === 'whatsapp' ? 'chat' : 'mail'} size={30} /><strong>{option === 'whatsapp' ? 'WhatsApp' : 'Correo electrónico'}</strong><span>{option === 'whatsapp' ? 'Una conversación más cercana' : 'Consulta cuando te venga bien'}</span>{channel === option && <span className="channel-check"><Icon name="check" size={18} /></span>}</button>)}</div>
-        <div className="channel-privacy"><Icon name="shield" size={16} /><p>{firstVisit ? t('bookingEmail.channelPrivacy') : 'El mensaje solo incluye una solicitud de cita. Los antecedentes, las molestias y la firma no se añaden a WhatsApp ni al correo.'}</p></div><p className="field-hint">WhatsApp: +34 611 53 79 27.<br />{firstVisit ? t('bookingEmail.channelHint') : <>Correo: {contact.email}</>}</p>
+        <h3 className="sr-only">{t('bookingContact.channelLabel')}</h3><div className="channel-options" role="group" aria-label={t('bookingContact.channelLabel')}>{(['whatsapp', 'email'] as const).map(option => <button key={option} className={`channel-card ${channel === option ? 'selected' : ''}`} aria-pressed={channel === option} onClick={() => { if (channel !== option) emailRequestId.current = null; setChannel(option) }}><Icon name={option === 'whatsapp' ? 'chat' : 'mail'} size={30} /><strong>{option === 'whatsapp' ? 'WhatsApp' : t('bookingEmail.email')}</strong><span>{t(`bookingContact.${option === 'whatsapp' ? 'whatsappDescription' : 'emailDescription'}`)}</span>{channel === option && <span className="channel-check"><Icon name="check" size={18} /></span>}</button>)}</div>
+        <div className="channel-privacy"><Icon name="shield" size={16} /><p>{t(firstVisit ? 'bookingEmail.channelPrivacy' : 'bookingContact.channelPrivacy')}</p></div><p className="field-hint">WhatsApp: +34 611 53 79 27.<br />{t(firstVisit ? 'bookingEmail.channelHint' : 'bookingContact.channelHint')}</p>
       </>}
       {step === 'preview' && <>
-        {firstVisitEmail ? <>
-          <div className="message-preview first-visit-email"><div className="message-preview-header"><Icon name="mail" size={23} /><div><strong>{t('bookingEmail.title')}</strong><span>{t('bookingEmail.recipient')}</span></div><span className="demo-badge">{t('bookingEmail.testBadge')}</span></div><div className="message-body"><RequestPreview data={fullRequest()} /><span>{t('bookingEmail.fullContents')}</span></div></div>
+        {emailFlow ? <>
+          <div className="message-preview first-visit-email"><div className="message-preview-header"><Icon name="mail" size={23} /><div><strong>{t(firstVisitEmail ? 'bookingEmail.title' : 'bookingContact.title')}</strong><span>{t('bookingEmail.recipient')}</span></div><span className="demo-badge">{t('bookingEmail.testBadge')}</span></div><div className="message-body">{firstVisitEmail ? <RequestPreview data={fullRequest()} /> : <p><span>{t('bookingContact.nameLabel')}: {returningContact.name.trim()}</span><br /><span>{t('bookingEmail.email')}: {returningContact.email.trim()}</span></p>}<span>{t(firstVisitEmail ? 'bookingEmail.fullContents' : 'bookingContact.contents')}</span></div></div>
           <div className="preview-actions" aria-busy={sending}><button type="button" className="button button-primary" disabled={sending || emailStatus === 'sent'} onClick={sendEmail}><Icon name="mail" size={18} />{t(`bookingEmail.${emailStatus === 'sending' ? 'sending' : emailStatus === 'sent' ? 'sentButton' : emailStatus === 'error' ? 'retry' : 'send'}`)}</button>{!sending && <a className="button button-outline" href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" size={18} />{t('bookingEmail.whatsapp')}</a>}</div>
-          <p className={emailStatus === 'error' ? 'error-summary' : 'field-hint'} role={emailStatus === 'error' ? 'alert' : 'status'}>{emailStatus === 'sending' ? t('bookingEmail.sending') : emailStatus === 'sent' ? t('bookingEmail.success') : emailStatus === 'error' ? t(`bookingEmail.${fullFormDisabled ? 'disabled' : 'error'}`) : ''}</p>
+          <p className={emailStatus === 'error' ? 'error-summary' : 'field-hint'} role={emailStatus === 'error' ? 'alert' : 'status'}>{emailStatus === 'sending' ? t('bookingEmail.sending') : emailStatus === 'sent' ? t('bookingEmail.success') : emailStatus === 'error' ? t(`bookingEmail.${firstVisitEmail && fullFormDisabled ? 'disabled' : 'error'}`) : ''}</p>
         </> : <>
-        <div className={`message-preview ${channel === 'whatsapp' ? 'whatsapp-preview' : ''}`}><div className="message-preview-header"><Icon name={channel === 'whatsapp' ? 'chat' : 'mail'} size={23} /><div><strong>{channel === 'whatsapp' ? 'Tu mensaje de WhatsApp' : 'Tu correo para Reathlet'}</strong><span>{channel === 'whatsapp' ? '+34 611 53 79 27' : contact.email}</span></div>{channel === 'email' && <span className="demo-badge">DEMO</span>}</div><div className="message-body"><p>{message}</p><span>{channel === 'whatsapp' ? 'Se abrirá WhatsApp; tendrás que pulsar Enviar.' : 'Vista previa · No se ha enviado ningún mensaje'}</span></div></div>
-        <div className="preview-actions"><button className="button button-outline" onClick={copyMessage}><Icon name="copy" size={18} />Copiar mensaje</button>{channel === 'email' ? <a className="button button-primary" href={`mailto:${contact.email}?subject=${encodeURIComponent('Solicitud de cita · Reathlet')}&body=${encodeURIComponent(message)}`}><Icon name="mail" size={18} />Abrir borrador de correo</a> : <a className="button button-primary" href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" size={18} />Abrir WhatsApp</a>}</div><p className="field-hint" role="status">{copyStatus}</p>
+        <div className="message-preview whatsapp-preview"><div className="message-preview-header"><Icon name="chat" size={23} /><div><strong>{t('bookingContact.whatsappTitle')}</strong><span>+34 611 53 79 27</span></div></div><div className="message-body"><p>{message}</p><span>{t('bookingContact.whatsappNotice')}</span></div></div>
+        <div className="preview-actions"><button className="button button-outline" onClick={copyMessage}><Icon name="copy" size={18} />{t('bookingContact.copy')}</button><a className="button button-primary" href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" size={18} />{t('bookingContact.openWhatsapp')}</a></div><p className="field-hint" role="status">{copyStatus}</p>
         </>}
-        <div className="preview-summary"><Icon name="calendar" size={22} /><div><strong>La clínica confirmará tu cita.</strong><p>La disponibilidad, duración y precio se acuerdan en el primer contacto. En esta versión no se realiza ninguna reserva.</p></div></div>
+        <div className="preview-summary"><Icon name="calendar" size={22} /><div><strong>{t('bookingContact.summaryTitle')}</strong><p>{t('bookingContact.summaryText')}</p></div></div>
       </>}
     </div>
-    <div className="booking-footer">{step === 'choose' ? <><span><Icon name="shield" size={15} />Tu información, con cuidado</span><button className="text-button" onClick={onClose}>Seguir explorando</button></> : <><button className="back-button" disabled={sending || (firstVisitEmail && emailStatus === 'sent')} onClick={back}>Atrás</button>{formStep > 0 ? <button className="button button-primary" type="submit" form="intake-form">{step === 'consent' ? 'Firmar y continuar' : 'Continuar'}</button> : step === 'channel' ? <button className="button button-primary" disabled={!channel} onClick={() => changeStep('preview')}>Ver mi solicitud</button> : <button className="button button-primary" disabled={sending} onClick={onClose}>Volver a la web</button>}</>}</div>
+    <div className="booking-footer">{step === 'choose' ? <><span><Icon name="shield" size={15} />Tu información, con cuidado</span><button className="text-button" onClick={onClose}>{t('booking.explore')}</button></> : <><button className="back-button" disabled={sending || (emailFlow && emailStatus === 'sent')} onClick={back}>{t('booking.back')}</button>{formStep > 0 || step === 'returning-data' ? <button className="button button-primary" type="submit" form="intake-form">{step === 'consent' ? 'Firmar y continuar' : step === 'returning-data' ? t('bookingContact.review') : t('booking.next')}</button> : step === 'channel' ? <button className="button button-primary" disabled={!channel} onClick={() => changeStep(returningEmail ? 'returning-data' : 'preview')}>{t(returningEmail ? 'booking.next' : 'bookingContact.review')}</button> : <button className="button button-primary" disabled={sending} onClick={onClose}>{t('booking.finish')}</button>}</>}</div>
   </Modal>
 }

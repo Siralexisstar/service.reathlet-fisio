@@ -88,6 +88,35 @@ test('uses server-configured from/to and the validated patient reply_to for both
   }
 })
 
+test('returning contact-only requests reject invalid contact, honeypot, identifiers and all extra fields before Resend', async () => {
+  const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
+  const habitual = { ...valid, tipoPaciente: 'HABITUAL', website: '' }
+  for (const body of [
+    { ...habitual, nombre: '' }, { ...habitual, email: 'invalid' }, { ...habitual, website: 'bot' },
+    { ...habitual, version: 1 }, { ...habitual, clinico: {} }, { ...habitual, firma: 'Firma ficticia' },
+    { ...habitual, consentimientos: { privacidad: true } },
+    { ...habitual, to: 'other@example.com' }, { ...habitual, reply_to: 'other@example.com' },
+  ]) await failure(await post(body), 400)
+  await failure(await post(habitual, null), 400)
+  assert.equal(resend.mock.callCount(), 0)
+})
+
+test('returning requests retain controlled configuration, conflict and provider errors', async () => {
+  const habitual = { ...valid, tipoPaciente: 'HABITUAL', website: '' }
+  const resend = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call Resend') })
+  delete process.env.RESEND_API_KEY
+  await failure(await post(habitual), 500, true)
+  assert.equal(resend.mock.callCount(), 0)
+  process.env.RESEND_API_KEY = fakeApiKey
+  for (const status of [409, 429, 500]) {
+    resend.mock.mockImplementation(async () => Response.json({ message: `${fakeApiKey} ${valid.email}` }, { status }))
+    const result = await failure(await post(habitual), status === 409 ? 409 : 502, true)
+    assert.equal(JSON.stringify(result).includes(fakeApiKey), false)
+    assert.equal(JSON.stringify(result).includes(valid.email), false)
+  }
+  assert.equal(resend.mock.callCount(), 3)
+})
+
 test('accepts an empty optional honeypot but rejects filled or invalid values without contacting Resend', async () => {
   const resend = mock.method(globalThis, 'fetch', async () => Response.json({ id: 'test-email-id' }))
   assert.equal((await post({ ...valid, website: '' })).status, 200)
