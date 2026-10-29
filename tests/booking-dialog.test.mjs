@@ -28,11 +28,15 @@ before(async () => {
   dom.window.HTMLCanvasElement.prototype.toDataURL = () => signatureDataUrl()
   dom.window.HTMLCanvasElement.prototype.setPointerCapture = () => {}
   i18n = createInstance()
-  const translation = JSON.parse(await readFile(new URL('../src/i18n/locales/es-ES.json', import.meta.url), 'utf8'))
-  await i18n.init({ lng: 'es-ES', resources: { 'es-ES': { translation } }, interpolation: { escapeValue: false } })
+  const resources = {}
+  for (const locale of ['es-ES', 'ca-ES', 'en-GB']) resources[locale] = {
+    translation: JSON.parse(await readFile(new URL(`../src/i18n/locales/${locale}.json`, import.meta.url), 'utf8')),
+  }
+  await i18n.init({ lng: 'es-ES', resources, interpolation: { escapeValue: false } })
 })
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('es-ES')
   // The default mock blocks every outgoing HTTP call, including unexpected ones.
   mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected HTTP request') })
   mock.method(dom.window.Storage.prototype, 'setItem', () => { throw new Error('Patient data must not be persisted') })
@@ -128,6 +132,153 @@ async function preview({ optional = true, pain, drawn = false } = {}) {
   await click(button('Ver mi solicitud'))
 }
 
+async function returningPreview() {
+  await click(button(i18n.t('booking.next')))
+  await fill('name', ' Paciente habitual ficticio ')
+  await fill('email', 'habitual@example.com')
+  await click(container.querySelector('#privacy'))
+  await click(button(i18n.t('bookingContact.review')))
+}
+
+test('returning email validates contact and privacy, previews without sending and accepts only one explicit send', async () => {
+  let accept
+  const request = mock.method(globalThis, 'fetch', () => new Promise(resolve => { accept = resolve }))
+  await mount({ patient: 'returning', channel: 'email' })
+  await click(button('Continuar'))
+  assert.equal(container.querySelector('#privacy').checked, false)
+  assert.equal(container.querySelector('#name').maxLength, 160)
+  assert.equal(container.querySelector('#email').maxLength, 254)
+  assert.equal(container.querySelector('#privacy').required, true)
+  await click(button('Ver mi solicitud'))
+  for (const field of ['name', 'email', 'privacy']) assert.ok(container.querySelector(`#${field}-error`))
+  await fill('name', ' ')
+  await fill('email', 'invalid')
+  await click(button('Ver mi solicitud'))
+  assert.ok(container.querySelector('#name-error'))
+  assert.ok(container.querySelector('#email-error'))
+  await fill('name', ' Paciente habitual ficticio ')
+  await fill('email', 'habitual@example.com')
+  await click(button('Ver mi solicitud'))
+  assert.ok(container.querySelector('#privacy-error'))
+  assert.equal(request.mock.callCount(), 0)
+  await click(container.querySelector('#privacy'))
+  await click(button('Ver mi solicitud'))
+  assert.equal(request.mock.callCount(), 0)
+  assert.equal(container.querySelector('a[href^="mailto:"]'), null)
+  assert.doesNotMatch(container.textContent, /DEMO|Se abrirá WhatsApp|Tu primer paso/)
+  const send = button('Enviar solicitud')
+  await act(async () => { send.click(); send.click() })
+  assert.equal(request.mock.callCount(), 1)
+  assert.equal(button('Enviando solicitud…').disabled, true)
+  assert.equal(button('Atrás').disabled, true)
+  assert.equal(container.querySelector('.dialog-close').disabled, true)
+  const [url, options] = request.mock.calls[0].arguments
+  assert.equal(url, '/api/enviar-solicitud')
+  assert.equal(options.method, 'POST')
+  assert.equal(options.headers['Content-Type'], 'application/json')
+  assert.match(options.headers['Idempotency-Key'], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  assert.deepEqual(JSON.parse(options.body), {
+    tipoPaciente: 'HABITUAL', nombre: 'Paciente habitual ficticio', email: 'habitual@example.com', website: '',
+  })
+  await act(async () => accept(Response.json({ validated: true, sent: true })))
+  assert.match(container.querySelector('[role="status"]').textContent, /aceptado.*entrega no está confirmada.*cita sigue pendiente/)
+  assert.equal(button('Solicitud enviada').disabled, true)
+  assert.equal(button('Atrás').disabled, true)
+})
+
+test('returning honeypot stays hidden and travels only in the request body', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 400 }))
+  await mount({ patient: 'returning', channel: 'email' })
+  await returningPreview()
+  await click(button('Atrás'))
+  const trap = container.querySelector('input[name="website"]')
+  assert.ok(trap.closest('[hidden][aria-hidden="true"]'))
+  assert.equal(trap.tabIndex, -1)
+  assert.equal(trap.autocomplete, 'off')
+  await fill('booking-website', 'bot-marker')
+  await click(button('Ver mi solicitud'))
+  assert.doesNotMatch(container.textContent, /bot-marker/)
+  await click(button('Enviar solicitud'))
+  assert.equal(JSON.parse(request.mock.calls[0].arguments[1].body).website, 'bot-marker')
+  assert.doesNotMatch(container.querySelector('a[href^="https://wa.me/"]').href, /bot-marker/)
+  assert.ok(container.querySelector('[role="alert"]'))
+})
+
+for (const field of ['name', 'email', 'privacy', 'booking-website']) {
+  test(`returning ${field} edits invalidate the identifier even when restored`, async () => {
+    const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+    await mount({ patient: 'returning', channel: 'email' })
+    await returningPreview()
+    await click(button('Enviar solicitud'))
+    await click(button('Atrás'))
+    assert.equal(container.querySelector('#email').value, 'habitual@example.com')
+    if (field === 'privacy') {
+      await click(container.querySelector('#privacy'))
+      await click(container.querySelector('#privacy'))
+    } else {
+      const original = container.querySelector(`#${field}`).value
+      await fill(field, field === 'email' ? 'changed@example.com' : 'changed')
+      await fill(field, original)
+    }
+    await click(button('Ver mi solicitud'))
+    await click(button('Reintentar envío'))
+    assert.equal(request.mock.calls[0].arguments[1].body, request.mock.calls[1].arguments[1].body)
+    assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
+  })
+}
+
+test('returning channel changes and new requests renew identifiers without cross-channel sends', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: false }, { status: 502 }))
+  await mount({ patient: 'returning', channel: 'email' })
+  await returningPreview()
+  await click(button('Enviar solicitud'))
+  await click(button('Atrás'))
+  await click(button('Atrás'))
+  await click(button('WhatsAppUna conversación más cercana'))
+  await click(button('Ver mi solicitud'))
+  const link = container.querySelector('a[href^="https://wa.me/"]')
+  assert.doesNotMatch(decodeURIComponent(link.href), /habitual@example.com|Paciente habitual ficticio/)
+  assert.equal(request.mock.callCount(), 1)
+  await click(button('Atrás'))
+  await click(button('Correo electrónicoConsulta cuando te venga bien'))
+  await click(button('Continuar'))
+  assert.equal(container.querySelector('#email').value, 'habitual@example.com')
+  await click(button('Ver mi solicitud'))
+  await click(button('Reintentar envío'))
+  const key = call => call.arguments[1].headers['Idempotency-Key']
+  assert.notEqual(key(request.mock.calls[0]), key(request.mock.calls[1]))
+  for (let step = 0; step < 3; step++) await click(button('Atrás'))
+  await click(button('Ya soy pacienteContacta para pedir una nueva cita.'))
+  await click(button('Continuar'))
+  assert.equal(container.querySelector('#name').value, '')
+  assert.equal(container.querySelector('#email').value, '')
+  assert.equal(container.querySelector('#privacy').checked, false)
+  await act(async () => root.render(null))
+  await mount({ patient: 'returning', channel: 'email' })
+  await returningPreview()
+  await click(button('Enviar solicitud'))
+  assert.notEqual(key(request.mock.calls[1]), key(request.mock.calls[2]))
+})
+
+for (const locale of ['es-ES', 'ca-ES', 'en-GB']) for (const patient of ['new', 'returning']) for (const channel of ['email', 'whatsapp']) {
+  test(`${locale} / ${patient} / ${channel}: preview texts and actions match the channel`, async () => {
+    const request = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not send on preview') })
+    await mount({ patient, channel })
+    if (patient === 'new') await preview()
+    else if (channel === 'email') await returningPreview()
+    else await click(button('Ver mi solicitud'))
+    await act(async () => i18n.changeLanguage(locale))
+    const expectedTitle = channel === 'whatsapp' ? 'bookingContact.whatsappPreviewTitle' : patient === 'new' ? 'bookingEmail.title' : 'bookingContact.title'
+    const expectedDescription = channel === 'whatsapp' ? 'bookingContact.whatsappPreviewText' : patient === 'new' ? 'bookingEmail.previewText' : 'bookingContact.previewText'
+    assert.equal(container.querySelector('#booking-title').textContent, i18n.t(expectedTitle))
+    assert.equal(container.querySelector('[data-slot="dialog-description"]').textContent, i18n.t(expectedDescription))
+    assert.equal(container.querySelector('a[href^="mailto:"]'), null)
+    if (channel === 'email') assert.ok(button(i18n.t('bookingEmail.send')))
+    else assert.equal(container.querySelector('a[href^="https://wa.me/"]').textContent, i18n.t('bookingContact.openWhatsapp'))
+    assert.equal(request.mock.callCount(), 0)
+  })
+}
+
 test('requires validation and consent before an explicit v2 send, previews all sections and blocks duplicate clicks', async () => {
   let accept
   const resend = mock.method(globalThis, 'fetch', () => new Promise(resolve => { accept = resolve }))
@@ -172,23 +323,28 @@ test('requires validation and consent before an explicit v2 send, previews all s
   assert.ok(container.querySelector('a[href^="https://wa.me/"]'))
 })
 
-for (const [name, response] of [
+for (const patient of ['new', 'returning']) for (const [name, response] of [
   ['HTTP validation error', () => Response.json({ sent: false }, { status: 400 })],
   ['HTTP provider error', () => Response.json({ sent: false }, { status: 502 })],
   ['HTTP idempotency conflict', () => Response.json({ sent: false }, { status: 409 })],
+  ['HTTP rate limit', () => new Response('Too many requests', { status: 429 })],
   ['HTTP failure even with sent true', () => Response.json({ sent: true }, { status: 500 })],
   ['unconfirmed send', () => Response.json({ validated: true, sent: false })],
   ['invalid JSON', () => new Response('<html>Not an API response</html>')],
+  ['unexpected null', () => Response.json(null)],
+  ['unexpected array', () => Response.json([])],
+  ['wrong sent type', () => Response.json({ sent: 'true' })],
   ['network failure', () => { throw new TypeError('Network failure') }],
 ]) {
-  test(`${name}: shows an error, keeps contact data and allows an explicit retry`, async () => {
+  test(`${patient} / ${name}: shows an error, keeps contact data and allows an explicit retry`, async () => {
     const request = mock.method(globalThis, 'fetch', async () => response())
-    await mount()
-    await preview()
+    await mount({ patient, channel: 'email' })
+    if (patient === 'new') await preview()
+    else await returningPreview()
     await click(button('Enviar solicitud'))
     assert.match(container.querySelector('[role="alert"]').textContent, /No hemos podido confirmar/)
-    assert.match(container.textContent, /Paciente ficticio/)
-    assert.match(container.textContent, /prueba@example.com/)
+    assert.match(container.textContent, patient === 'new' ? /Paciente ficticio/ : /Paciente habitual ficticio/)
+    assert.match(container.textContent, patient === 'new' ? /prueba@example.com/ : /habitual@example.com/)
     assert.equal(button('Reintentar envío').disabled, false)
     assert.ok(container.querySelector('a[href^="https://wa.me/"]'))
     request.mock.mockImplementation(async () => Response.json({ sent: true }))
@@ -392,16 +548,16 @@ test('changing channel away and back renews the key without sending clinical inf
   assert.notEqual(request.mock.calls[0].arguments[1].headers['Idempotency-Key'], request.mock.calls[1].arguments[1].headers['Idempotency-Key'])
 })
 
-test('existing patients keep the mail draft and WhatsApp paths without calling the API', async () => {
+test('existing patients choose WhatsApp without contact fields or any API call', async () => {
   const request = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call API') })
-  await mount({ patient: 'returning', channel: 'email' })
+  await mount({ patient: 'returning', channel: 'whatsapp' })
   await click(button('Ver mi solicitud'))
-  assert.ok(container.querySelector('a[href^="mailto:"]'))
+  assert.equal(container.querySelector('input'), null)
+  assert.equal(container.querySelector('a[href^="mailto:"]'), null)
   assert.match(container.querySelector('.message-body').textContent, /Ya soy paciente/)
-  await click(button('Atrás'))
-  await click(button('WhatsAppUna conversación más cercana'))
-  await click(button('Ver mi solicitud'))
-  assert.ok(container.querySelector('a[href^="https://wa.me/"]'))
+  const message = new URL(container.querySelector('a[href^="https://wa.me/"]').href).searchParams.get('text')
+  assert.equal(message, 'Hola, Reathlet. Ya soy paciente y me gustaría solicitar una nueva cita. ¿Podemos hablar de la disponibilidad? Gracias.')
+  assert.match(container.querySelector('[data-slot="dialog-description"]').textContent, /abre WhatsApp/)
   assert.equal(request.mock.callCount(), 0)
 })
 
@@ -414,8 +570,8 @@ test('first visits can still choose WhatsApp without calling the API', async () 
   assert.equal(request.mock.callCount(), 0)
 })
 
-test('switching from a completed first visit to an existing patient never enables automatic sending', async () => {
-  const request = mock.method(globalThis, 'fetch', async () => { throw new Error('Must not call API') })
+test('switching from a completed first visit clears clinical state and requires fresh contact and privacy before a returning send', async () => {
+  const request = mock.method(globalThis, 'fetch', async () => Response.json({ sent: true }))
   await mount({})
   await click(button('Es mi primera visitaUn formulario breve para conocerte mejor.Datos, motivo de consulta y consentimiento.'))
   // Select the email channel after completing the form when no channel was preselected.
@@ -433,8 +589,20 @@ test('switching from a completed first visit to an existing patient never enable
   for (let step = 0; step < 4; step++) await click(button('Atrás'))
   await click(button('Ya soy pacienteContacta para pedir una nueva cita.'))
   await click(button('Correo electrónicoConsulta cuando te venga bien'))
+  await click(button('Continuar'))
+  assert.equal(container.querySelector('#name').value, '')
+  assert.equal(container.querySelector('#email').value, '')
+  assert.equal(container.querySelector('#privacy').checked, false)
+  assert.equal(container.querySelector('#healthConsent'), null)
+  assert.equal(container.querySelector('#signature'), null)
+  await fill('name', 'Paciente habitual ficticio')
+  await fill('email', 'habitual@example.com')
+  await click(container.querySelector('#privacy'))
   await click(button('Ver mi solicitud'))
-  assert.ok(container.querySelector('a[href^="mailto:"]'))
-  assert.match(container.querySelector('.message-body').textContent, /Ya soy paciente/)
   assert.equal(request.mock.callCount(), 0)
+  assert.doesNotMatch(container.querySelector('.message-body').textContent, /Firma ficticia|Consulta ficticia/)
+  await click(button('Enviar solicitud'))
+  assert.deepEqual(JSON.parse(request.mock.calls[0].arguments[1].body), {
+    tipoPaciente: 'HABITUAL', nombre: 'Paciente habitual ficticio', email: 'habitual@example.com', website: '',
+  })
 })

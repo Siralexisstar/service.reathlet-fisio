@@ -176,6 +176,50 @@ use fictional data and mocked HTTP; no real emails, deployments or project chang
 are part of this task. The privacy, encryption, contractual, recipient-access and
 retention requirements above remain pending before real health data is used.
 
+## Extension: Existing-patient email integration (PL-0005)
+
+Replace the existing-patient email draft with an explicit API send. Only this
+channel asks for name, email and acceptance of the privacy information, followed
+by a preview. Keep existing-patient WhatsApp independent, with its original short
+message and no contact fields. Titles, preview instructions and notices reflect
+the selected patient/channel in Spanish, Catalan and English, without a general
+internationalization refactor or new dependencies.
+
+Use the original versionless body: `tipoPaciente: HABITUAL`, `nombre`, `email`
+and empty `website`. Do not send `version: 1`, phone, clinical data, consents or
+signatures. Separate returning-patient contact state and payload construction
+from the full first-visit form; choosing a patient type starts a fresh request
+and clears old contact/clinical/signature state. The UI requires privacy
+acceptance but does not send or persist it: the unchanged original contract does
+not provide server-side consent evidence or patient authentication.
+
+Reuse the existing sending/accepted/error state, synchronous click guard,
+20-second timeout, UUID v4 header, honeypot and explicit retries. No request is
+sent on opening, channel selection or preview. Preserve the key/body for an
+unchanged retry and invalidate the key on contact/privacy/honeypot changes,
+channel changes or a new request. Block sending/back navigation after acceptance
+and navigation/closing during sending. Do not silently bypass conflicts with a
+new key. Require HTTP success and `sent: true`; never promise delivery or a booking.
+
+Keep backend behaviour and v2 unchanged: closed field lists, validation, private
+`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_TO_EMAIL`, validated Reply-To and
+controlled provider errors. The UI also handles non-JSON 429 responses from WAF.
+Provider 429 remains a generic 502; provider idempotency conflicts remain 409,
+and missing server configuration remains 500. No provider internals are exposed.
+
+`RESEND_FULL_FORM_ENABLED` remains an exact-true opt-in for v2 only, in every
+environment. Original-contract HABITUAL sends do not depend on it; no global
+switch or additional environment variable is introduced. A disabled v2 flag is
+not a safe no-email test mode for the returning-patient flow. Mock HTTP in all
+automated tests or block the route before browser checks. Live test sending is
+a later manual action using fictional data and an authorised test inbox.
+
+Review the legal holder, privacy information, recipient access, retention and
+provider arrangements before using real contact data. The stricter health-data
+and signature safeguards described above remain pending for v2. No persistence,
+clinical-record access, legal-consent evidence or production configuration is
+added by this integration.
+
 ## Consequences
 
 The API and UI can be tested without sending real email. The local API was manually

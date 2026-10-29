@@ -26,7 +26,7 @@ npm run preview
 - Eight treatments with a horizontal carousel and information cards.
 - Four recovery stages with keyboard navigation.
 - Clinic gallery, frequently asked questions and contact section.
-- Forms for new and existing patients, including validation, typed or drawn signatures and contact preview.
+- First-visit form with validation, consent, typed/drawn signature and full email preview; a separate contact-only email form for existing patients.
 - Legal notice, privacy, cookies and accessibility pages under `/legal/*`.
 - Browser-language detection with Spanish (`es-ES`) as the default fallback, plus English and Catalan catalogs.
 - Instagram and TikTok links in the main header.
@@ -46,7 +46,7 @@ Images are served from `public/images` and do not depend on a session in the ori
 - `.husky/`: pre-commit and pre-push validation hooks.
 - `api/enviar-solicitud.ts`: Vercel Function for contact-data validation and Resend email sending.
 - `tests/enviar-solicitud.test.ts`: API contract tests using Node's built-in test runner.
-- `tests/booking-dialog.test.mjs`: React first-visit flow tests using jsdom and the existing Vite/Node tools.
+- `tests/booking-dialog.test.mjs`: React email/WhatsApp flow tests for both patient types, using jsdom and the existing Vite/Node tools.
 
 ## Appointment request API (local email testing)
 
@@ -334,12 +334,78 @@ test-sender restrictions. Verify the notification's sender and recipient, then u
 **Reply** in your mail client to check that `Reply-To` selects the fictional patient
 address; inspecting the reply draft does not require sending it. Confirm the
 patient name and type remain in the message. Do not print the key or paste it into diagnostics.
-`npm test` checks the handler and React first-visit flow without Vercel authentication.
+`npm test` checks the handler and both React patient flows without Vercel authentication.
 It uses the installed TypeScript compiler and Node test runner, emitting temporary
 JavaScript under `node_modules/.tmp/api-tests`; no test dependencies are added.
 API tests replace `fetch` and use a fictional key. UI tests use jsdom (a development
 dependency), Vite's existing TypeScript/JSX loader and Node's test runner. They
 replace every outgoing HTTP request; no test can send real mail.
+
+### Existing-patient email flow (PL-0005)
+
+**Ya soy paciente → Correo electrónico** now requests name, email and acceptance
+of the privacy information, then shows a preview. Only an explicit **Enviar
+solicitud** click calls the same API. No email app or `mailto:` draft is opened.
+The request uses the original contract, without a `version` property:
+
+```json
+{
+  "tipoPaciente": "HABITUAL",
+  "nombre": "Paciente de prueba",
+  "email": "prueba@example.com",
+  "website": ""
+}
+```
+
+The UUID v4 `Idempotency-Key`, hidden honeypot, synchronous click guard, timeout,
+explicit retry and acceptance checks are shared with first-visit email. Contact
+state is separate from the clinical form. Switching patient type starts a fresh
+request and clears contact, clinical fields, signatures and consents. Errors and
+back navigation within a request preserve entered contact details. Unchanged
+retries reuse the key; edits, channel changes or another request invalidate it.
+Closing the dialog discards local state without browser storage.
+
+The privacy checkbox is required by the UI and starts unchecked. It is not sent
+or recorded by the original API: no extra fields are added to that contract, and
+this is not a server-side consent record or identity verification. Before using
+real contact data, validate the legal holder, purpose, privacy notice, intended
+recipient, mailbox access, retention and provider arrangements. The additional
+health-data safeguards described for v2 remain pending and unchanged.
+
+Only `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `RESEND_TO_EMAIL` are needed for
+this contact-only send. **RESEND_FULL_FORM_ENABLED is not a global email switch:**
+an absent/false value blocks v2 only, not HABITUAL or other original-contract
+requests. No new variable is introduced. Reply-To remains the validated patient
+email; the client cannot choose the sender or recipient.
+
+HTTP 409, 429, 500, 502, malformed responses and unconfirmed sends show an error
+with retained data and an explicit retry. A WAF 429 can arrive before the function
+and need not contain JSON. Provider 429 responses retain the existing generic
+502 mapping; provider 409 remains 409. No automatic retry is attempted. Success
+means provider acceptance, not inbox delivery or an appointment.
+
+| Patient / channel | Submission |
+| --- | --- |
+| First visit / email | Full v2 form; exact `RESEND_FULL_FORM_ENABLED=true` required |
+| First visit / WhatsApp | Existing brief message with name and optional availability; no clinical information or signature |
+| Existing patient / email | Original contact-only contract; no full-form flag requirement |
+| Existing patient / WhatsApp | Existing generic message; no name/email form required |
+
+For a **no-email** browser check, run `npm run dev` and block
+`*/api/enviar-solicitud` in browser DevTools Network request blocking **before**
+clicking Send. Complete the existing-patient email form with fictional data;
+verify validation, preview without a request, one explicit blocked POST, retained
+contact details and an unchanged UUID on retry. Change contact details and check
+that the UUID changes. Choose WhatsApp and verify it asks for no contact fields
+and makes no API request. Keeping the full-form flag false alone does **not**
+make the existing-patient email check safe from sending.
+
+For a manual live test, after reviewing this change, start `vercel dev` with the
+existing environment-loading command above, using an authorised test inbox and
+fictional details only. Open the same existing-patient email flow and press Send
+once. Inspect the HABITUAL payload, recipient, Reply-To and acceptance message.
+The test-sender/domain restrictions described above still apply. These manual
+live steps are not run by the automated tests or by the implementation workflow.
 
 ### First-visit browser flow and safe local checks
 
@@ -359,7 +425,8 @@ back navigation stay locked. Closing or starting a new first visit clears the
 form, consents and both signatures. There is no browser persistence or automatic retry.
 
 WhatsApp still contains only the general request, name and optional preference.
-Existing patients keep their WhatsApp/email-draft flow and never call this API.
+Existing-patient WhatsApp remains independent; existing-patient email uses the
+separate contact-only flow described above.
 The three locale catalogs, footer and draft legal notices describe the full-form
 submission, its conditional sending and the outstanding privacy review. No server credentials or recipient configuration
 are included in React.
@@ -389,8 +456,9 @@ To verify safely without sending a real email:
    data, either consent or the signature: the next send must have a different UUID.
    Switch signature modes and verify the inactive alternative is absent.
 6. Close/reopen or restart the first visit: data and signatures must be cleared.
-   Verify the habitual-patient and WhatsApp paths still avoid the API and exclude
-   clinical data/signatures. Restore the shell variable when finished; do not set
+   Verify WhatsApp paths still avoid the API and exclude clinical data/signatures.
+   Do not send a habitual-patient email in this flag-only blocked check: it is not
+   covered by the v2 flag. Restore the shell variable when finished; do not set
    it true for this manual blocked-path check.
 
 Do not run the legacy live-send curl example when following these no-email steps.
@@ -400,7 +468,7 @@ or Vercel project change is needed for those tests.
 
 ### Spam and duplicate protections (iteration 4)
 
-The first-visit form has a `website` text input inside a native `hidden` container,
+Both email forms have a `website` text input inside a native `hidden` container,
 also marked `aria-hidden`, with `tabIndex=-1` and autocomplete disabled. It is absent
 from normal visual, keyboard and assistive-technology interaction. Its value travels
 only to this endpoint. It is never forwarded to Resend, logged or persisted. A
@@ -499,7 +567,8 @@ submission uses the full-form v2 contract, with sending disabled by default and
 enabled only by exact `RESEND_FULL_FORM_ENABLED=true`, including production.
 Privacy/security safeguards for real health data remain pending. Legacy contact-only API clients
 remain supported. The interface reports provider acceptance, not delivery or a
-reservation. WhatsApp and habitual-patient email drafts keep their previous scope.
+reservation. Existing-patient email now uses the original contact-only API
+contract; both WhatsApp paths retain their brief external-message behaviour.
 Closing the dialog removes local form state; it cannot delete an email previously
 accepted by an external provider.
 
