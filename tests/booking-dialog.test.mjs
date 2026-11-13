@@ -140,6 +140,44 @@ async function returningPreview() {
   await click(button(i18n.t('bookingContact.review')))
 }
 
+for (const locale of ['es-ES', 'ca-ES', 'en-GB']) {
+  test(`${locale}: updated first-visit labels keep required fields, options, validation and back navigation`, async () => {
+    await i18n.changeLanguage(locale)
+    await mount()
+    await fill('name', 'Paciente ficticio')
+    await fill('email', 'prueba@example.com')
+    await click(button(i18n.t('booking.next')))
+    const label = id => container.querySelector(`label[for="${id}"]`).childNodes[0].textContent.trim()
+    assert.equal(label('region'), i18n.t('booking.regionLabel'))
+    assert.equal(label('reason'), i18n.t('booking.reasonLabel'))
+    if (locale === 'es-ES') {
+      assert.equal(label('region'), '¿Qué zona del cuerpo te preocupa o presentas molestias?')
+      assert.equal(label('reason'), 'Cuéntanos brevemente el motivo de consulta.')
+    }
+    const { regionOptions } = await server.ssrLoadModule('/src/lib/firstVisit.ts')
+    assert.deepEqual([...container.querySelector('#region').options].map(option => option.value), ['', ...regionOptions])
+    for (const id of ['region', 'duration', 'reason']) assert.equal(container.querySelector(`#${id}`).required, true)
+    assert.equal(container.querySelector('#reason').maxLength, 1000)
+    await click(button(i18n.t('booking.next')))
+    for (const id of ['region', 'duration', 'reason']) {
+      assert.ok(container.querySelector(`#${id}-error`))
+      assert.equal(container.querySelector(`#${id}`).getAttribute('aria-invalid'), 'true')
+    }
+    await fill('region', 'Valoración general')
+    await fill('duration', 'Menos de una semana')
+    await fill('reason', 'Corto')
+    await click(button(i18n.t('booking.next')))
+    assert.ok(container.querySelector('#reason-error'))
+    await fill('reason', 'Consulta ficticia con más de diez caracteres.')
+    await click(button(i18n.t('booking.next')))
+    assert.ok(container.querySelector('#privacy'))
+    await click(button(i18n.t('booking.back')))
+    assert.equal(container.querySelector('#reason').value, 'Consulta ficticia con más de diez caracteres.')
+    assert.equal(label('region'), i18n.t('booking.regionLabel'))
+    assert.equal(globalThis.fetch.mock.callCount(), 0)
+  })
+}
+
 test('returning email validates contact and privacy, previews without sending and accepts only one explicit send', async () => {
   let accept
   const request = mock.method(globalThis, 'fetch', () => new Promise(resolve => { accept = resolve }))

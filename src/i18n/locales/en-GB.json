@@ -99,7 +99,15 @@
     "closeForm": "Close form",
     "closeTreatment": "Close treatment"
   },
-  "nav": { "clinic": "The clinic", "treatments": "Treatments", "recovery": "Your recovery", "contact": "Contact" },
+  "nav": { "hyrox": "HYROX", "clinic": "The clinic", "treatments": "Treatments", "recovery": "Your recovery", "contact": "Contact" },
+  "hyrox": {
+    "eyebrow": "A NEW SPACE AT REATHLET",
+    "comingSoon": "COMING SOON",
+    "subtitle": "Get ready for what’s next.",
+    "description": "We’re preparing a space dedicated to HYROX, with news, events and content about injury prevention, recovery and sports preparation.",
+    "backHome": "Back to home",
+    "treatments": "Explore treatments"
+  },
   "header": { "utility": "Your movement deserves care.", "location": "Cornellà de Llobregat, Barcelona" },
   "hero": {
     "eyebrow": "PHYSIOTHERAPY WITH ONE GOAL: YOU",
@@ -173,7 +181,7 @@
     "floating": "Let's talk"
   },
   "footer": { "tagline": "Movement is part of you.<br/>Caring for it is how we support you.", "legal": "Legal information", "prototype": "Requests await confirmation. The full form is emailed only when sending is enabled. Privacy and security review for real health data is still pending." },
-  "booking": { "eyebrow": "REATHLET · WITH YOU FROM THE START", "chooseTitle": "Shall we get to know each other?", "chooseText": "Choose the option that best describes you.", "dataTitle": "Let's start with you.", "dataText": "Only what we need to prepare your first contact.", "reasonTitle": "Tell us a little.", "reasonText": "You do not need a diagnosis. Tell us what you would like to recover.", "consentTitle": "Your peace of mind matters.", "consentText": "Read the information and sign to continue.", "channelTitle": "How would you like to talk?", "channelText": "The clinic will confirm availability and price.", "previewTitle": "Your first step is ready.", "previewText": "WhatsApp will open so you can review and send your message.", "demoStrong": "Test with fictional data.", "demoText": "This demo does not save health data or signatures and does not create real appointments.", "firstVisit": "It is my first visit", "returning": "I am already a patient", "next": "Continue", "back": "Back", "explore": "Keep exploring", "review": "Review", "finish": "Back to the website", "step": "Step {{step}} of 3", "yourData": "Your details", "yourConsultation": "Your consultation", "consent": "Consent", "formError": "Review the marked fields before continuing." },
+  "booking": { "regionLabel": "Which part of your body concerns you or feels uncomfortable?", "reasonLabel": "Briefly tell us the reason for your consultation.", "eyebrow": "REATHLET · WITH YOU FROM THE START", "chooseTitle": "Shall we get to know each other?", "chooseText": "Choose the option that best describes you.", "dataTitle": "Let's start with you.", "dataText": "Only what we need to prepare your first contact.", "reasonTitle": "Tell us a little.", "reasonText": "You do not need a diagnosis. Tell us what you would like to recover.", "consentTitle": "Your peace of mind matters.", "consentText": "Read the information and sign to continue.", "channelTitle": "How would you like to talk?", "channelText": "The clinic will confirm availability and price.", "previewTitle": "Your first step is ready.", "previewText": "WhatsApp will open so you can review and send your message.", "demoStrong": "Test with fictional data.", "demoText": "This demo does not save health data or signatures and does not create real appointments.", "firstVisit": "It is my first visit", "returning": "I am already a patient", "next": "Continue", "back": "Back", "explore": "Keep exploring", "review": "Review", "finish": "Back to the website", "step": "Step {{step}} of 3", "yourData": "Your details", "yourConsultation": "Your consultation", "consent": "Consent", "formError": "Review the marked fields before continuing." },
   "content": {
     "treatments": [
       { "title": "Hands-on therapy", "category": "Mobility and function", "summary": "Precise hands-on work to improve your mobility and function.", "description": "Manual techniques aimed at improving mobility, reducing pain and optimising musculoskeletal function." },

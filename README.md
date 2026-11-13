@@ -20,6 +20,21 @@ npm run build
 npm run preview
 ```
 
+## Production routes (Vercel)
+
+The root `vercel.json` rewrites `/hyrox`, `/hyrox/` and `/legal/:path*` to
+`/index.html`, allowing direct access and reloads of these React pages. The
+browser keeps the requested URL; `src/App.tsx` selects the page as before.
+The rules are limited to these page paths: `/api/enviar-solicitud`, `/assets/*`,
+`/images/*` and other static files keep their normal routing. No global fallback,
+redirect, environment change or backend change is introduced.
+
+`npm test` checks both the required page mappings and their restricted scope.
+Vite's development/preview servers supply their own SPA fallback; their HTTP
+tests do not emulate Vercel. Direct page access/reloads and the API response
+Content-Type still need verification on Vercel after an authorized deployment.
+Adding this local file does not deploy the application or change the remote project.
+
 ## Content
 
 - Home page with a three-photo carousel and controlled playback.
@@ -28,6 +43,7 @@ npm run preview
 - Clinic gallery, frequently asked questions and contact section.
 - First-visit form with validation, consent, typed/drawn signature and full email preview; a separate contact-only email form for existing patients.
 - Legal notice, privacy, cookies and accessibility pages under `/legal/*`.
+- HYROX coming-soon page at `/hyrox`, linked from the desktop and mobile menus.
 - Browser-language detection with Spanish (`es-ES`) as the default fallback, plus English and Catalan catalogs.
 - Instagram and TikTok links in the main header.
 
@@ -42,11 +58,57 @@ Images are served from `public/images` and do not depend on a session in the ori
 - `src/components/BookingDialog.tsx`: appointment request flow.
 - `src/components/Modal.tsx`: native dialogs with focus management.
 - `src/components/LegalPage.tsx`: informational and legal pages.
+- `src/components/HyroxPage.tsx`: translated HYROX presentation; shares the site's header, footer and booking dialog.
 - `src/App.css`: styles and mobile adaptations.
 - `.husky/`: pre-commit and pre-push validation hooks.
 - `api/enviar-solicitud.ts`: Vercel Function for contact-data validation and Resend email sending.
 - `tests/enviar-solicitud.test.ts`: API contract tests using Node's built-in test runner.
 - `tests/booking-dialog.test.mjs`: React email/WhatsApp flow tests for both patient types, using jsdom and the existing Vite/Node tools.
+- `tests/hyrox-page.test.mjs`: HYROX routing, navigation, translations, local HTTP reload and booking-entry tests.
+
+## HYROX — local review (PL-0006)
+
+Start the local-only development server from the repository root:
+
+```sh
+npm run dev -- --host 127.0.0.1
+```
+
+Vite printed `http://127.0.0.1:5173/` during this implementation. Open
+`http://127.0.0.1:5173/hyrox` (or use the actual port printed if 5173 is busy).
+Stop the server with Ctrl+C. No API server or email configuration is needed to
+review the page and the form labels. Do not submit real requests during review.
+
+Check direct access and reload, the HYROX menu entry, return to home, all four
+home-section links, legal links and both appointment buttons. In the first-visit
+form, enter fictional name/email and continue to inspect the two updated labels.
+Check desktop, tablet and mobile widths (including 320px), keyboard focus and the
+mobile menu. Browser-language detection selects Spanish, Catalan or English; there
+is no language switcher. The new page uses the existing navy/orange variables,
+system font and buttons, with subtle track-inspired lines, a soft orange
+glow and one coming-soon heading. A fine orange line adds a slow light sweep;
+the background curves vary their brightness gently. Both effects become static
+with `prefers-reduced-motion`. The repeated text strip was removed after
+visual feedback; extra space separates the presentation from the footer.
+It adds no photographs or external assets.
+
+All 108 automated tests passed, including the PL-0004/PL-0005 request regressions,
+as did lint, TypeScript (`check`) and build. Email-provider calls are mocked.
+HTTP reload tests contact only a temporary Vite server on `127.0.0.1` and close it
+afterwards. In a restricted execution sandbox, they need local loopback access.
+Visual review remains pending: the integrated browser could not connect to the
+local server, and Windows browser control stopped because it could not verify
+the browser URL. Automated DOM tests do not verify pixel layout or overflow.
+
+### Adding confirmed content later
+
+Keep `/hyrox` and its shared site shell in `src/App.tsx`. Extend `HyroxPage` with
+small sections when actual content is approved. Put approved local photographs
+and videos in `public/`, with translated alternative text, captions and video
+controls/captions as appropriate. Add repeated content metadata to `src/data.ts`
+only when needed; keep visible copy in all three `src/i18n/locales` catalogs.
+Confirmed events can start as a simple semantic list with titles, dates and real
+links. No gallery, event model, API, CMS or placeholder calendar is created now.
 
 ## Appointment request API (local email testing)
 
