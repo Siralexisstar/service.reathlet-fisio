@@ -336,7 +336,7 @@ h2 span,p {
 }
 
 .desktop-nav {
-  gap:30px;
+  gap:20px;
   font-size:.875rem;
   font-weight:550;
   display:flex
@@ -358,8 +358,12 @@ h2 span,p {
   left:0
 }
 
-.desktop-nav a:hover:after {
+.desktop-nav a:hover:after,.desktop-nav a[aria-current=page]:after {
   width:100%
+}
+
+.desktop-nav a[aria-current=page],.mobile-nav a[aria-current=page] {
+  color:var(--orange)
 }
 
 .header-actions {
@@ -1592,7 +1596,7 @@ h2 span,p {
 
 }
 
-@media (max-width:850px) {
+@media (max-width:1100px) {
   .desktop-nav {
     display:none
   }
@@ -1612,6 +1616,10 @@ h2 span,p {
     padding:12px 0;
     font-size:1rem
   }
+
+}
+
+@media (max-width:850px) {
 
   .hero-grid {
     gap:26px
@@ -3023,4 +3031,194 @@ textarea.field-input {
 
 .hero-carousel-controls .photo-control {
   background:#10234465
+}
+
+/* HYROX: temporary presentation, using Reathlet's palette and typography. */
+.hyrox-page {
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  margin-bottom:clamp(40px,5vw,64px);
+  background:radial-gradient(ellipse at 90% 20%,color-mix(in srgb,var(--orange-bright) 10%,transparent),transparent 60%),var(--navy);
+  color:var(--primary-foreground)
+}
+
+.hyrox-content {
+  position:relative;
+  padding-top:30px;
+  padding-bottom:90px
+}
+
+.hyrox-topline {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:24px;
+  padding-bottom:25px;
+  border-bottom:1px solid color-mix(in srgb,var(--primary-foreground) 20%,transparent);
+  font-size:.75rem
+}
+
+.hyrox-back,.hyrox-treatments {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px
+}
+
+.hyrox-back:hover,.hyrox-treatments:hover {
+  color:var(--orange-bright)
+}
+
+.hyrox-topline>span {
+  letter-spacing:.12em
+}
+
+.hyrox-intro {
+  margin-top:52px;
+  padding-left:24px;
+  border-left:5px solid var(--orange-bright)
+}
+
+.hyrox-intro .eyebrow {
+  color:var(--orange-bright);
+  margin-bottom:8px
+}
+
+.hyrox-intro h1 {
+  font-size:clamp(3rem,6vw,5rem);
+  font-weight:800;
+  line-height:1;
+  letter-spacing:-.055em
+}
+
+.hyrox-coming {
+  position:relative;
+  margin:30px 0 18px;
+  font-size:clamp(2rem,7.4vw,6.5rem);
+  font-weight:800;
+  letter-spacing:-.045em;
+  line-height:1.2;
+  color:var(--orange-bright)
+}
+
+/* A fixed accent with a passing light; it does not represent progress. */
+.hyrox-energy {
+  width:min(240px,60%);
+  height:2px;
+  margin-bottom:34px;
+  overflow:hidden;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--orange-bright) 45%,transparent),transparent);
+  pointer-events:none
+}
+
+.hyrox-energy span {
+  display:block;
+  width:32%;
+  height:100%;
+  background:linear-gradient(90deg,transparent,var(--orange-bright),transparent);
+  transform:translateX(100%);
+  animation:hyrox-energy-sweep 7s ease-in-out infinite
+}
+
+@keyframes hyrox-energy-sweep {
+  0% { transform:translateX(-110%); opacity:0; }
+  15%,65% { opacity:.9; }
+  80%,100% { transform:translateX(330%); opacity:0; }
+}
+
+.hyrox-details {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:48px
+}
+
+.hyrox-copy {
+  max-width:640px
+}
+
+.hyrox-subtitle {
+  color:var(--primary-foreground);
+  font-size:clamp(1.5rem,2.5vw,2rem);
+  letter-spacing:-.03em;
+  font-weight:600;
+  line-height:1.25
+}
+
+.hyrox-description {
+  color:var(--border);
+  margin-top:18px;
+  font-size:1rem;
+  line-height:1.8
+}
+
+.hyrox-actions {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:12px;
+  flex-shrink:0
+}
+
+.hyrox-treatments {
+  font-size:.875rem;
+  font-weight:600
+}
+
+.hyrox-track {
+  position:absolute;
+  z-index:-1;
+  width:650px;
+  height:900px;
+  right:-180px;
+  top:-240px;
+  transform:rotate(32deg);
+  mask-image:linear-gradient(to bottom,transparent,#000 25%,#000 60%,transparent);
+  pointer-events:none
+}
+
+.hyrox-track span {
+  position:absolute;
+  inset:0;
+  border:1px solid var(--primary-foreground);
+  border-radius:50%;
+  opacity:.09;
+  animation:hyrox-track-light 14s ease-in-out infinite
+}
+
+.hyrox-track span:nth-child(2) { inset:45px; }
+.hyrox-track span:nth-child(3) { inset:90px; }
+
+@keyframes hyrox-track-light {
+  0%,100% { opacity:.07; }
+  50% { opacity:.12; }
+}
+
+@media (max-width:480px) {
+  .header-actions .social-links { display:none; }
+}
+
+@media (max-width:850px) {
+  .hyrox-details { flex-direction:column; align-items:flex-start; gap:28px; }
+  .hyrox-actions { flex-direction:row; align-items:center; gap:24px; flex-wrap:wrap; }
+}
+
+@media (max-width:640px) {
+  .hyrox-content { padding-top:16px; padding-bottom:52px; }
+  .hyrox-topline { padding-bottom:16px; gap:12px; }
+  .hyrox-topline>span { font-size:.625rem; letter-spacing:.06em; }
+  .hyrox-intro { margin-top:36px; padding-left:16px; border-left-width:4px; }
+  .hyrox-intro .eyebrow { font-size:.625rem; letter-spacing:.08em; }
+  .hyrox-coming { margin:28px 0 18px; font-size:clamp(1.5rem,8vw,3.25rem); }
+  .hyrox-energy { margin-bottom:28px; }
+  .hyrox-description { font-size:.9375rem; }
+  .hyrox-actions { gap:12px 24px; }
+  .hyrox-track { opacity:.6; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .hyrox-energy span,.hyrox-track span { animation:none; }
+  .hyrox-energy span { transform:translateX(100%); opacity:.8; }
+  .hyrox-track span { opacity:.09; }
 }

@@ -5,6 +5,7 @@ import { Icon } from './components/Icon'
 import { Modal } from './components/Modal'
 import { contact, legalLinks, photographs, questions, recoverySteps, socialLinks, treatments } from './data'
 import { LegalPage } from './components/LegalPage'
+import { HyroxPage } from './components/HyroxPage'
 import { Trans, useTranslation } from 'react-i18next'
 import './App.css'
 
@@ -13,11 +14,12 @@ function Brand() {
   return <a className="brand" href="/" aria-label={t('common.home')}><img src="/images/simbolo.jpeg" alt="" width="46" height="46" /><span><strong>REATHLET</strong><small>{t('common.sportsPhysiotherapy')}</small></span></a>
 }
 
-const navigation = [['nav.clinic', '#clinica'], ['nav.treatments', '#tratamientos'], ['nav.recovery', '#metodo'], ['nav.contact', '#contacto']]
+const navigation = [['nav.clinic', '/#clinica'], ['nav.treatments', '/#tratamientos'], ['nav.hyrox', '/hyrox'], ['nav.recovery', '/#metodo'], ['nav.contact', '/#contacto']]
 
-function Header({ onBook }: { onBook: () => void }) {
+function Header({ onBook, hyrox }: { onBook: () => void; hyrox: boolean }) {
   const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const navigationLinks = navigation.map(([key, href]) => <a key={href} href={href} aria-current={hyrox && href === '/hyrox' ? 'page' : undefined} onClick={() => setMenuOpen(false)}>{t(key)}</a>)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -29,7 +31,7 @@ function Header({ onBook }: { onBook: () => void }) {
   return <>
     <a className="skip-link" href="#contenido">{t('common.skipToContent')}</a>
     <div className="utility-bar"><div className="container"><span>{t('header.utility')}</span><span><Icon name="pin" size={14} />{t('header.location')}</span></div></div>
-    <header className="header"><div className="container header-inner"><Brand /><nav className="desktop-nav" aria-label={t('common.mainNavigation')}>{navigation.map(([key, href]) => <a key={href} href={href}>{t(key)}</a>)}</nav><div className="header-actions"><div className="social-links" aria-label="Social media"><span className="sr-only">Social media</span>{socialLinks.map(link => <a key={link.name} className="social-link" href={link.href} target="_blank" rel="noopener noreferrer" aria-label={`${link.name} Reathlet`}><Icon name={link.icon} size={18} /></a>)}</div><button className="button button-primary small" onClick={onBook}><Icon name="calendar" size={17} />{t('common.bookAppointment')}</button><button className="mobile-menu" aria-label={menuOpen ? t('common.closeMenu') : t('common.openMenu')} aria-expanded={menuOpen} aria-controls="mobile-nav" onClick={() => setMenuOpen(!menuOpen)}><Icon name={menuOpen ? 'close' : 'menu'} /></button></div></div>{menuOpen && <nav id="mobile-nav" className="mobile-nav" aria-label={t('common.mobileNavigation')}>{navigation.map(([key, href]) => <a key={href} href={href} onClick={() => setMenuOpen(false)}>{t(key)}</a>)}</nav>}</header>
+    <header className="header"><div className="container header-inner"><Brand /><nav className="desktop-nav" aria-label={t('common.mainNavigation')}>{navigationLinks}</nav><div className="header-actions"><div className="social-links" aria-label="Social media"><span className="sr-only">Social media</span>{socialLinks.map(link => <a key={link.name} className="social-link" href={link.href} target="_blank" rel="noopener noreferrer" aria-label={`${link.name} Reathlet`}><Icon name={link.icon} size={18} /></a>)}</div><button className="button button-primary small" onClick={onBook}><Icon name="calendar" size={17} />{t('common.bookAppointment')}</button><button className="mobile-menu" aria-label={menuOpen ? t('common.closeMenu') : t('common.openMenu')} aria-expanded={menuOpen} aria-controls="mobile-nav" onClick={() => setMenuOpen(!menuOpen)}><Icon name={menuOpen ? 'close' : 'menu'} /></button></div></div>{menuOpen && <nav id="mobile-nav" className="mobile-nav" aria-label={t('common.mobileNavigation')}>{navigationLinks}</nav>}</header>
   </>
 }
 
@@ -112,14 +114,14 @@ function Footer() {
   return <footer className="footer"><div className="container"><div className="footer-top"><Brand /><p><Trans i18nKey="footer.tagline" components={{ br: <br /> }} /></p><a className="text-button" href="#contenido">{t('common.backToTop')}<Icon name="up" size={18} /></a></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Reathlet · Cornellà de Llobregat</span><nav aria-label={t('footer.legal')}>{legalLinks.map(item => <a key={item.slug} href={`/legal/${item.slug}`}>{item.label}</a>)}</nav></div><p className="prototype-note">{t('footer.prototype')}</p></div></footer>
 }
 
-function HomePage() {
+function SitePage({ hyrox }: { hyrox: boolean }) {
   const { t } = useTranslation()
   const [booking, setBooking] = useState<BookingIntent | null>(null)
   const [selectedTreatment, setSelectedTreatment] = useState<number | null>(null)
   const onBook = (intent: BookingIntent = {}) => setBooking(intent)
   const treatment = selectedTreatment === null ? null : treatments[selectedTreatment]
 
-  return <><Header onBook={() => onBook()} /><main id="contenido"><Hero onBook={() => onBook({ patient: 'new' })} /><div className="care-strip"><div className="container"><span><Icon name="scan" />{t('careStrip.assessment')}</span><span><Icon name="heart" />{t('careStrip.close')}</span><span><Icon name="activity" />{t('careStrip.recovery')}</span><span><Icon name="pin" />{t('careStrip.here')}</span></div></div><Treatments onSelect={setSelectedTreatment} /><Recovery onBook={() => onBook()} /><Clinic onBook={() => onBook()} /><FAQ /><Contact onBook={onBook} /></main><Footer /><a className="floating-contact" aria-label={t('contactSection.whatsapp')} href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('Hola, Reathlet. Me gustaría solicitar información sobre una cita. ¿Podemos hablar de la disponibilidad? Gracias.')}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" /><span>{t('contactSection.floating')}</span></a>
+  return <><Header onBook={() => onBook()} hyrox={hyrox} /><main id="contenido">{hyrox ? <HyroxPage onBook={() => onBook()} /> : <><Hero onBook={() => onBook({ patient: 'new' })} /><div className="care-strip"><div className="container"><span><Icon name="scan" />{t('careStrip.assessment')}</span><span><Icon name="heart" />{t('careStrip.close')}</span><span><Icon name="activity" />{t('careStrip.recovery')}</span><span><Icon name="pin" />{t('careStrip.here')}</span></div></div><Treatments onSelect={setSelectedTreatment} /><Recovery onBook={() => onBook()} /><Clinic onBook={() => onBook()} /><FAQ /><Contact onBook={onBook} /></>}</main><Footer /><a className="floating-contact" aria-label={t('contactSection.whatsapp')} href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('Hola, Reathlet. Me gustaría solicitar información sobre una cita. ¿Podemos hablar de la disponibilidad? Gracias.')}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" /><span>{t('contactSection.floating')}</span></a>
     {treatment && <Modal className="treatment-dialog" label="treatment-title" closeLabel={t('common.closeTreatment')} onClose={() => setSelectedTreatment(null)}><p className="eyebrow">{t(`content.treatments.${selectedTreatment}.category`, { defaultValue: treatment.category }).toUpperCase()}</p><h2 id="treatment-title" data-slot="dialog-title">{t(`content.treatments.${selectedTreatment}.title`, { defaultValue: treatment.title })}</h2><p data-slot="dialog-description">{t(`content.treatments.${selectedTreatment}.description`, { defaultValue: treatment.description })}</p><div className="treatment-expect"><h3>{t('treatments.assessmentTitle')}</h3><p>{t('treatments.assessmentText')}</p></div><p className="fine-print">{t('treatments.footnote')}</p><button className="button button-primary" onClick={() => { setSelectedTreatment(null); onBook() }}>{t('treatments.askAbout')}</button></Modal>}
     {booking && <BookingDialog intent={booking} onClose={() => setBooking(null)} />}
   </>
@@ -127,5 +129,5 @@ function HomePage() {
 
 export default function App() {
   const legalSlug = window.location.pathname.startsWith('/legal/') ? window.location.pathname.split('/')[2] : null
-  return legalSlug ? <LegalPage slug={legalSlug} brand={<Brand />} /> : <HomePage />
+  return legalSlug ? <LegalPage slug={legalSlug} brand={<Brand />} /> : <SitePage hyrox={/^\/hyrox\/?$/.test(window.location.pathname)} />
 }
