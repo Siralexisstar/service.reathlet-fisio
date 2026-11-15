@@ -3,6 +3,10 @@
   "rewrites": [
     { "source": "/hyrox", "destination": "/index.html" },
     { "source": "/hyrox/", "destination": "/index.html" },
+    { "source": "/crossfit", "destination": "/index.html" },
+    { "source": "/crossfit/", "destination": "/index.html" },
+    { "source": "/pulse-event", "destination": "/index.html" },
+    { "source": "/pulse-event/", "destination": "/index.html" },
     { "source": "/legal/:path*", "destination": "/index.html" }
   ]
 }

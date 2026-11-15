@@ -75,9 +75,9 @@ function readLocalPage(path) {
   })
 }
 
-test('Vercel rewrites direct HYROX and legal page requests to the application entry point', async () => {
+test('Vercel rewrites direct sport event and legal page requests to the application entry point', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'))
-  for (const source of ['/hyrox', '/hyrox/', '/legal/:path*']) {
+  for (const source of ['/hyrox', '/hyrox/', '/crossfit', '/crossfit/', '/pulse-event', '/pulse-event/', '/legal/:path*']) {
     const rule = config.rewrites.find(item => item.source === source)
     assert.ok(rule, `Missing SPA rewrite: ${source}`)
     assert.equal(rule.destination, '/index.html')
@@ -88,7 +88,7 @@ test('Vercel rewrites direct HYROX and legal page requests to the application en
 
 test('Vercel SPA rewrites stay scoped to page routes, preserving API and static-file routing', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'))
-  const pageSources = new Set(['/hyrox', '/hyrox/', '/legal/:path*'])
+  const pageSources = new Set(['/hyrox', '/hyrox/', '/crossfit', '/crossfit/', '/pulse-event', '/pulse-event/', '/legal/:path*'])
   // A broad fallback could send API requests or missing assets to HTML instead.
   for (const rule of config.rewrites) {
     assert.ok(pageSources.has(rule.source), `Rewrite must remain limited to app pages: ${rule.source}`)

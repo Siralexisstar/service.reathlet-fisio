@@ -22,9 +22,10 @@ npm run preview
 
 ## Production routes (Vercel)
 
-The root `vercel.json` rewrites `/hyrox`, `/hyrox/` and `/legal/:path*` to
-`/index.html`, allowing direct access and reloads of these React pages. The
-browser keeps the requested URL; `src/App.tsx` selects the page as before.
+The root `vercel.json` rewrites `/hyrox`, `/crossfit`, `/pulse-event` (with or
+without a trailing slash) and `/legal/:path*` to `/index.html`, allowing direct
+access and reloads of these React pages. The browser keeps the requested URL;
+`src/App.tsx` selects the page as before.
 The rules are limited to these page paths: `/api/enviar-solicitud`, `/assets/*`,
 `/images/*` and other static files keep their normal routing. No global fallback,
 redirect, environment change or backend change is introduced.
