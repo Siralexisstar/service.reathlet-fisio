@@ -3166,6 +3166,51 @@ textarea.field-input {
   font-weight:600
 }
 
+.desktop-nav a[href="/pulse-event"],.mobile-nav a[href="/pulse-event"] {
+  animation:pulse-nav-blink 1.8s ease-in-out infinite
+}
+
+@keyframes pulse-nav-blink {
+  0%,100% { opacity:1; color:inherit; }
+  50% { opacity:.48; color:var(--orange-bright); }
+}
+
+.pulse-page {
+  background:radial-gradient(ellipse at 84% 38%,rgba(235,185,157,.16),transparent 34%),#101e3c;
+}
+
+.pulse-logo {
+  float:right;
+  position:relative;
+  z-index:1;
+  width:clamp(170px,22vw,270px);
+  height:auto;
+  aspect-ratio:1;
+  object-fit:contain;
+  border:1px solid rgba(255,255,255,.32);
+  border-radius:18px;
+  background:#f4e7df;
+  box-shadow:0 22px 60px rgba(0,0,0,.24);
+  margin:0 5% 20px 24px
+}
+
+.pulse-page .hyrox-copy { max-width:580px; }
+
+.pulse-ticket-link {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:48px;
+  padding:0 18px;
+  border-radius:8px;
+  background:var(--orange-bright);
+  color:var(--navy);
+  font-size:.875rem;
+  font-weight:700
+}
+
+.pulse-ticket-link:hover { filter:brightness(1.08); }
+
 .hyrox-track {
   position:absolute;
   z-index:-1;
@@ -3215,10 +3260,12 @@ textarea.field-input {
   .hyrox-description { font-size:.9375rem; }
   .hyrox-actions { gap:12px 24px; }
   .hyrox-track { opacity:.6; }
+  .pulse-logo { width:clamp(110px,32vw,170px); margin:0 0 16px 16px; }
 }
 
 @media (prefers-reduced-motion:reduce) {
   .hyrox-energy span,.hyrox-track span { animation:none; }
+  .desktop-nav a[href="/pulse-event"],.mobile-nav a[href="/pulse-event"] { animation:none; }
   .hyrox-energy span { transform:translateX(100%); opacity:.8; }
   .hyrox-track span { opacity:.09; }
 }

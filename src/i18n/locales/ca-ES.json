@@ -99,7 +99,7 @@
     "closeForm": "Tancar formulari",
     "closeTreatment": "Tancar tractament"
   },
-  "nav": { "hyrox": "HYROX", "clinic": "La clínica", "treatments": "Tractaments", "recovery": "La teva recuperació", "contact": "Contacte" },
+  "nav": { "hyrox": "HYROX", "crossfit": "CROSSFIT", "pulse": "PULSE EVENT", "clinic": "La clínica", "treatments": "Tractaments", "recovery": "La teva recuperació", "contact": "Contacte" },
   "hyrox": {
     "eyebrow": "UN NOU ESPAI A REATHLET",
     "comingSoon": "PROPERAMENT",
@@ -108,6 +108,8 @@
     "backHome": "Tornar a l’inici",
     "treatments": "Consultar tractaments"
   },
+  "crossfit": {"eyebrow":"UN ESPAI PER AL TEU ENTRENAMENT","comingSoon":"PROPERAMENT","subtitle":"Entrena amb intensitat. Recupera’t amb criteri.","description":"Estem preparant un espai dedicat al CrossFit, amb continguts sobre prevenció de lesions, recuperació i com cuidar el cos per continuar entrenant.","backHome":"Tornar a l’inici","treatments":"Consultar tractaments"},
+  "pulse": {"eyebrow":"UN NOU ESDEVENIMENT DE MOVIMENT","comingSoon":"PROPERAMENT","subtitle":"Una nova experiència és en camí.","description":"PULSE arriba per reunir moviment, energia i comunitat. Segueix les novetats de l’esdeveniment i descobreix la informació per assistir-hi.","backHome":"Tornar a l’inici","treatments":"Consultar tractaments","tickets":"Comprar entrades","instagram":"Segueix PULSE a Instagram"},
   "header": { "utility": "El teu moviment mereix cura.", "location": "Cornellà de Llobregat, Barcelona" },
   "hero": {
     "eyebrow": "FISIOTERÀPIA AMB UN OBJECTIU: TU",

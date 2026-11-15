@@ -99,7 +99,7 @@
     "closeForm": "Close form",
     "closeTreatment": "Close treatment"
   },
-  "nav": { "hyrox": "HYROX", "clinic": "The clinic", "treatments": "Treatments", "recovery": "Your recovery", "contact": "Contact" },
+  "nav": { "hyrox": "HYROX", "crossfit": "CROSSFIT", "pulse": "PULSE EVENT", "clinic": "The clinic", "treatments": "Treatments", "recovery": "Your recovery", "contact": "Contact" },
   "hyrox": {
     "eyebrow": "A NEW SPACE AT REATHLET",
     "comingSoon": "COMING SOON",
@@ -108,6 +108,8 @@
     "backHome": "Back to home",
     "treatments": "Explore treatments"
   },
+  "crossfit": {"eyebrow":"A SPACE FOR YOUR TRAINING","comingSoon":"COMING SOON","subtitle":"Train hard. Recover well.","description":"We’re preparing a space dedicated to CrossFit, with content on injury prevention, recovery and looking after your body so you can keep training.","backHome":"Back to home","treatments":"Explore treatments"},
+  "pulse": {"eyebrow":"A NEW MOVEMENT EVENT","comingSoon":"COMING SOON","subtitle":"A new experience is on its way.","description":"PULSE is bringing movement, energy and community together. Follow event updates and find out how to attend.","backHome":"Back to home","treatments":"Explore treatments","tickets":"Buy tickets","instagram":"Follow PULSE on Instagram"},
   "header": { "utility": "Your movement deserves care.", "location": "Cornellà de Llobregat, Barcelona" },
   "hero": {
     "eyebrow": "PHYSIOTHERAPY WITH ONE GOAL: YOU",

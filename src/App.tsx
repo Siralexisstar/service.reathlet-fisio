@@ -14,12 +14,12 @@ function Brand() {
   return <a className="brand" href="/" aria-label={t('common.home')}><img src="/images/simbolo.jpeg" alt="" width="46" height="46" /><span><strong>REATHLET</strong><small>{t('common.sportsPhysiotherapy')}</small></span></a>
 }
 
-const navigation = [['nav.clinic', '/#clinica'], ['nav.treatments', '/#tratamientos'], ['nav.hyrox', '/hyrox'], ['nav.recovery', '/#metodo'], ['nav.contact', '/#contacto']]
+const navigation = [['nav.clinic', '/#clinica'], ['nav.treatments', '/#tratamientos'], ['nav.hyrox', '/hyrox'], ['nav.crossfit', '/crossfit'], ['nav.pulse', '/pulse-event'], ['nav.recovery', '/#metodo'], ['nav.contact', '/#contacto']]
 
-function Header({ onBook, hyrox }: { onBook: () => void; hyrox: boolean }) {
+function Header({ onBook, sportPage }: { onBook: () => void; sportPage: 'hyrox' | 'crossfit' | 'pulse' | null }) {
   const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
-  const navigationLinks = navigation.map(([key, href]) => <a key={href} href={href} aria-current={hyrox && href === '/hyrox' ? 'page' : undefined} onClick={() => setMenuOpen(false)}>{t(key)}</a>)
+  const navigationLinks = navigation.map(([key, href]) => <a key={href} href={href} aria-current={sportPage && href === (sportPage === 'pulse' ? '/pulse-event' : `/${sportPage}`) ? 'page' : undefined} onClick={() => setMenuOpen(false)}>{t(key)}</a>)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -114,14 +114,14 @@ function Footer() {
   return <footer className="footer"><div className="container"><div className="footer-top"><Brand /><p><Trans i18nKey="footer.tagline" components={{ br: <br /> }} /></p><a className="text-button" href="#contenido">{t('common.backToTop')}<Icon name="up" size={18} /></a></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Reathlet · Cornellà de Llobregat</span><nav aria-label={t('footer.legal')}>{legalLinks.map(item => <a key={item.slug} href={`/legal/${item.slug}`}>{item.label}</a>)}</nav></div><p className="prototype-note">{t('footer.prototype')}</p></div></footer>
 }
 
-function SitePage({ hyrox }: { hyrox: boolean }) {
+function SitePage({ sportPage }: { sportPage: 'hyrox' | 'crossfit' | 'pulse' | null }) {
   const { t } = useTranslation()
   const [booking, setBooking] = useState<BookingIntent | null>(null)
   const [selectedTreatment, setSelectedTreatment] = useState<number | null>(null)
   const onBook = (intent: BookingIntent = {}) => setBooking(intent)
   const treatment = selectedTreatment === null ? null : treatments[selectedTreatment]
 
-  return <><Header onBook={() => onBook()} hyrox={hyrox} /><main id="contenido">{hyrox ? <HyroxPage onBook={() => onBook()} /> : <><Hero onBook={() => onBook({ patient: 'new' })} /><div className="care-strip"><div className="container"><span><Icon name="scan" />{t('careStrip.assessment')}</span><span><Icon name="heart" />{t('careStrip.close')}</span><span><Icon name="activity" />{t('careStrip.recovery')}</span><span><Icon name="pin" />{t('careStrip.here')}</span></div></div><Treatments onSelect={setSelectedTreatment} /><Recovery onBook={() => onBook()} /><Clinic onBook={() => onBook()} /><FAQ /><Contact onBook={onBook} /></>}</main><Footer /><a className="floating-contact" aria-label={t('contactSection.whatsapp')} href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('Hola, Reathlet. Me gustaría solicitar información sobre una cita. ¿Podemos hablar de la disponibilidad? Gracias.')}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" /><span>{t('contactSection.floating')}</span></a>
+  return <><Header onBook={() => onBook()} sportPage={sportPage} /><main id="contenido">{sportPage ? <HyroxPage sport={sportPage} onBook={() => onBook()} /> : <><Hero onBook={() => onBook({ patient: 'new' })} /><div className="care-strip"><div className="container"><span><Icon name="scan" />{t('careStrip.assessment')}</span><span><Icon name="heart" />{t('careStrip.close')}</span><span><Icon name="activity" />{t('careStrip.recovery')}</span><span><Icon name="pin" />{t('careStrip.here')}</span></div></div><Treatments onSelect={setSelectedTreatment} /><Recovery onBook={() => onBook()} /><Clinic onBook={() => onBook()} /><FAQ /><Contact onBook={onBook} /></>}</main><Footer /><a className="floating-contact" aria-label={t('contactSection.whatsapp')} href={`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('Hola, Reathlet. Me gustaría solicitar información sobre una cita. ¿Podemos hablar de la disponibilidad? Gracias.')}`} target="_blank" rel="noopener noreferrer"><Icon name="chat" /><span>{t('contactSection.floating')}</span></a>
     {treatment && <Modal className="treatment-dialog" label="treatment-title" closeLabel={t('common.closeTreatment')} onClose={() => setSelectedTreatment(null)}><p className="eyebrow">{t(`content.treatments.${selectedTreatment}.category`, { defaultValue: treatment.category }).toUpperCase()}</p><h2 id="treatment-title" data-slot="dialog-title">{t(`content.treatments.${selectedTreatment}.title`, { defaultValue: treatment.title })}</h2><p data-slot="dialog-description">{t(`content.treatments.${selectedTreatment}.description`, { defaultValue: treatment.description })}</p><div className="treatment-expect"><h3>{t('treatments.assessmentTitle')}</h3><p>{t('treatments.assessmentText')}</p></div><p className="fine-print">{t('treatments.footnote')}</p><button className="button button-primary" onClick={() => { setSelectedTreatment(null); onBook() }}>{t('treatments.askAbout')}</button></Modal>}
     {booking && <BookingDialog intent={booking} onClose={() => setBooking(null)} />}
   </>
@@ -129,5 +129,7 @@ function SitePage({ hyrox }: { hyrox: boolean }) {
 
 export default function App() {
   const legalSlug = window.location.pathname.startsWith('/legal/') ? window.location.pathname.split('/')[2] : null
-  return legalSlug ? <LegalPage slug={legalSlug} brand={<Brand />} /> : <SitePage hyrox={/^\/hyrox\/?$/.test(window.location.pathname)} />
+  const pathname = window.location.pathname
+  const sportPage = /^\/hyrox\/?$/.test(pathname) ? 'hyrox' : /^\/crossfit\/?$/.test(pathname) ? 'crossfit' : /^\/pulse-event\/?$/.test(pathname) ? 'pulse' : null
+  return legalSlug ? <LegalPage slug={legalSlug} brand={<Brand />} /> : <SitePage sportPage={sportPage} />
 }

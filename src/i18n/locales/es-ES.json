@@ -99,7 +99,7 @@
     "closeForm": "Cerrar formulario",
     "closeTreatment": "Cerrar tratamiento"
   },
-  "nav": { "hyrox": "HYROX", "clinic": "La clínica", "treatments": "Tratamientos", "recovery": "Tu recuperación", "contact": "Contacto" },
+  "nav": { "hyrox": "HYROX", "crossfit": "CROSSFIT", "pulse": "PULSE EVENT", "clinic": "La clínica", "treatments": "Tratamientos", "recovery": "Tu recuperación", "contact": "Contacto" },
   "hyrox": {
     "eyebrow": "UN NUEVO ESPACIO EN REATHLET",
     "comingSoon": "PRÓXIMAMENTE",
@@ -108,6 +108,8 @@
     "backHome": "Volver al inicio",
     "treatments": "Consultar tratamientos"
   },
+  "crossfit": {"eyebrow":"UN ESPACIO PARA TU ENTRENAMIENTO","comingSoon":"PRÓXIMAMENTE","subtitle":"Entrena con intensidad. Recupérate con criterio.","description":"Estamos preparando un espacio dedicado a CrossFit, con contenidos sobre prevención de lesiones, recuperación y cómo cuidar tu cuerpo para seguir entrenando.","backHome":"Volver al inicio","treatments":"Consultar tratamientos"},
+  "pulse": {"eyebrow":"UN NUEVO EVENTO DE MOVIMIENTO","comingSoon":"PRÓXIMAMENTE","subtitle":"Una nueva experiencia está en camino.","description":"PULSE llega para reunir movimiento, energía y comunidad. Sigue las novedades del evento y descubre la información para asistir.","backHome":"Volver al inicio","treatments":"Consultar tratamientos","tickets":"Comprar entradas","instagram":"Sigue a PULSE en Instagram"},
   "header": { "utility": "Tu movimiento merece cuidado.", "location": "Cornellà de Llobregat, Barcelona" },
   "hero": {
     "eyebrow": "FISIOTERAPIA CON UN OBJETIVO: TÚ",
